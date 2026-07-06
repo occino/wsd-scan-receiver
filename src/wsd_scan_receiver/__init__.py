@@ -1,4 +1,4 @@
-"""Experimental WSD/WS-Scan push receiver service."""
+"""WSD/WS-Scan push receiver service."""
 
 __all__ = ["__version__"]
 

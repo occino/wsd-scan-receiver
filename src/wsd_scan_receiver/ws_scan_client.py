@@ -1,4 +1,4 @@
-"""Experimental active WSD scan client subscription support.
+"""Active WSD scan client subscription support.
 
 WSD push scanning is client-driven: a computer subscribes to a scanner service
 for ScanAvailableEvent notifications, and the scanner can then show that client
@@ -37,7 +37,7 @@ WSE_DELIVERY_PUSH = "http://schemas.xmlsoap.org/ws/2004/08/eventing/DeliveryMode
 WST = "http://schemas.xmlsoap.org/ws/2004/09/transfer"
 SCAN_PROBE_TYPES = "wscn:ScanDeviceType wscn:ScannerServiceType"
 DEVICE_PROBE_TYPES = "wsdp:Device"
-EPSON_STABLE_DISCOVERY_PATH = "/StableWSDiscoveryEndpoint/schemas-xmlsoap-org_ws_2005_04_discovery"
+STABLE_DISCOVERY_PATH = "/StableWSDiscoveryEndpoint/schemas-xmlsoap-org_ws_2005_04_discovery"
 SUBSCRIPTION_RENEW_MARGIN_SECONDS = 120
 SUBSCRIBE_EXPIRES = "PT1H"
 SCAN_CLIENT_CONTEXT = "Scan"
@@ -187,7 +187,7 @@ def parse_app_sequence_instance_id(payload: bytes) -> str:
     """Return the WS-Discovery AppSequence InstanceId, if present.
 
     DPWS devices are expected to change the AppSequence instance after a
-    reboot. Epson scanners appear to keep WSD destinations only in volatile
+    reboot. Some scanners keep WSD destinations only in volatile
     state, so a changed InstanceId is a strong signal that subscriptions should
     be created again.
     """
@@ -598,7 +598,7 @@ class WsScanClientService:
 
     def probe_once(self) -> None:
         """Send scan-device probes and attempt subscription for responses."""
-        self._probe_configured_printer_http()
+        self._probe_configured_scanner_http()
         payload = probe_xml()
         self._probe_ipv4(payload)
         self._probe_ipv6(payload)
@@ -728,13 +728,13 @@ class WsScanClientService:
                 extra={"family": family},
             )
 
-    def _probe_configured_printer_http(self) -> None:
-        if not self.config.epson_printer_ip:
+    def _probe_configured_scanner_http(self) -> None:
+        if not self.config.scanner_ip:
             return
 
-        discovery_url = f"http://{self.config.epson_printer_ip}:80{EPSON_STABLE_DISCOVERY_PATH}"
+        discovery_url = f"http://{self.config.scanner_ip}:80{STABLE_DISCOVERY_PATH}"
         LOGGER.info(
-            "probing configured Epson WSD stable discovery endpoint",
+            "probing configured WSD stable discovery endpoint",
             extra={"url": discovery_url},
         )
         response = self._post_soap(discovery_url, probe_xml(DEVICE_PROBE_TYPES))
@@ -748,13 +748,13 @@ class WsScanClientService:
         )
         if device is None:
             LOGGER.info(
-                "configured Epson WSD stable discovery response did not contain a scan device",
+                "configured WSD stable discovery response did not contain a scan device",
                 extra={"url": discovery_url},
             )
             return
 
         LOGGER.info(
-            "configured Epson WSD device discovered",
+            "configured WSD scanner discovered",
             extra={
                 "endpoint": device.endpoint,
                 "types": device.types,
@@ -1176,7 +1176,7 @@ class WsScanClientService:
                         "url": url,
                         "status": response.status,
                         "content_type": content_type,
-                        "body": response_body.decode("utf-8", "replace"),
+                        "bytes": len(response_body),
                     },
                 )
                 if 200 <= response.status < 300:

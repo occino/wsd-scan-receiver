@@ -12,6 +12,7 @@ services:
     environment:
       WSD_DEVICE_NAME: "${WSD_DEVICE_NAME:-Paperless WSD Scanner}"
       WSD_UUID: "${WSD_UUID:-}"
+      WSD_HTTP_PORT: "${WSD_HTTP_PORT:-5357}"
       OUTPUT_DIR: "/consume"
       # Optional: set this if automatic XAddr host IP detection picks the wrong
       # interface on a multi-homed host.
@@ -22,9 +23,10 @@ services:
       # ScanAvailableEvent notifications.
       WSD_SUBSCRIBE_ENABLED: "${WSD_SUBSCRIBE_ENABLED:-false}"
       WSD_SUBSCRIBE_INTERVAL_SECONDS: "${WSD_SUBSCRIBE_INTERVAL_SECONDS:-60}"
-      # Optional: Epson printer IP for directed WSD discovery when multicast
+      # Optional: scanner IP for directed WSD discovery when multicast
       # discovery is unreliable. This still uses WSD/DPWS only.
-      EPSON_PRINTER_IP: "${EPSON_PRINTER_IP:-}"
+      WSD_SCANNER_IP: "${WSD_SCANNER_IP:-}"
+      MAX_POST_BYTES: "${MAX_POST_BYTES:-104857600}"
       DEBUG: "${WSD_DEBUG:-false}"
       RAW_DUMP_DIR: "/debug-dumps"
       LOG_LEVEL: "${LOG_LEVEL:-INFO}"

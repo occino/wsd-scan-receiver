@@ -1,4 +1,4 @@
-"""SOAP helpers and experimental DPWS/WS-Scan routing.
+"""SOAP helpers and DPWS/WS-Scan routing.
 
 The handlers in this module intentionally cover only the stable discovery and
 metadata pieces plus conservative responses for common WS-Transfer,
@@ -15,6 +15,7 @@ import uuid
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 
+from . import __version__
 from .config import Config
 
 LOGGER = logging.getLogger(__name__)
@@ -158,7 +159,7 @@ def device_metadata_xml(config: Config) -> str:
   <mex:MetadataSection Dialect="http://schemas.xmlsoap.org/ws/2006/02/devprof/ThisDevice">
     <dpws:ThisDevice>
       <dpws:FriendlyName>{html.escape(config.device_name)}</dpws:FriendlyName>
-      <dpws:FirmwareVersion>experimental</dpws:FirmwareVersion>
+      <dpws:FirmwareVersion>{html.escape(__version__)}</dpws:FirmwareVersion>
       <dpws:SerialNumber>{html.escape(config.endpoint_uuid)}</dpws:SerialNumber>
     </dpws:ThisDevice>
   </mex:MetadataSection>
@@ -166,8 +167,8 @@ def device_metadata_xml(config: Config) -> str:
     <dpws:ThisModel>
       <dpws:Manufacturer>wsd-scan-receiver</dpws:Manufacturer>
       <dpws:ManufacturerUrl>https://example.invalid/wsd-scan-receiver</dpws:ManufacturerUrl>
-      <dpws:ModelName>Experimental WSD Scan Receiver</dpws:ModelName>
-      <dpws:ModelNumber>0.1</dpws:ModelNumber>
+      <dpws:ModelName>WSD Scan Receiver</dpws:ModelName>
+      <dpws:ModelNumber>{html.escape(__version__)}</dpws:ModelNumber>
       <pnpx:DeviceCategory>Computers</pnpx:DeviceCategory>
       <dpws:PresentationUrl>{html.escape(config.metadata_url)}</dpws:PresentationUrl>
     </dpws:ThisModel>
@@ -217,53 +218,6 @@ def route_soap_request(request: SoapRequest, config: Config) -> tuple[int, bytes
             "application/soap+xml; charset=utf-8",
         )
 
-    if "CreateScanJob" in action:
-        body = """<wscn:CreateScanJobResponse>
-  <wscn:JobId>experimental-job</wscn:JobId>
-  <wscn:JobToken>experimental-job</wscn:JobToken>
-</wscn:CreateScanJobResponse>"""
-        return (
-            200,
-            soap_envelope(
-                f"{WSCN}/CreateScanJobResponse",
-                body,
-                relates_to=request.message_id,
-                addressing_ns=request.addressing_ns,
-            ),
-            "application/soap+xml; charset=utf-8",
-        )
-
-    if "RetrieveImage" in action:
-        body = """<wscn:RetrieveImageResponse>
-  <wscn:JobId>experimental-job</wscn:JobId>
-  <wscn:JobState>Completed</wscn:JobState>
-</wscn:RetrieveImageResponse>"""
-        return (
-            200,
-            soap_envelope(
-                f"{WSCN}/RetrieveImageResponse",
-                body,
-                relates_to=request.message_id,
-                addressing_ns=request.addressing_ns,
-            ),
-            "application/soap+xml; charset=utf-8",
-        )
-
-    if "GetScannerElements" in action or "GetScannerStatus" in action:
-        body = """<wscn:GetScannerStatusResponse>
-  <wscn:ScannerState>Idle</wscn:ScannerState>
-</wscn:GetScannerStatusResponse>"""
-        return (
-            200,
-            soap_envelope(
-                f"{WSCN}/GetScannerStatusResponse",
-                body,
-                relates_to=request.message_id,
-                addressing_ns=request.addressing_ns,
-            ),
-            "application/soap+xml; charset=utf-8",
-        )
-
     if "ScanAvailableEvent" in action or (
         request.body_tag is not None and _local_name(request.body_tag) == "ScanAvailableEvent"
     ):
@@ -275,7 +229,7 @@ def route_soap_request(request: SoapRequest, config: Config) -> tuple[int, bytes
 
     fault = """<s:Fault>
   <s:Code><s:Value>s:Sender</s:Value></s:Code>
-  <s:Reason><s:Text xml:lang="en">Unsupported experimental WSD action</s:Text></s:Reason>
+  <s:Reason><s:Text xml:lang="en">Unsupported WSD action</s:Text></s:Reason>
 </s:Fault>"""
     return (
         500,

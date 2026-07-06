@@ -20,7 +20,8 @@ def _config(tmp_path: Path, port: int = 0) -> Config:
         log_level="INFO",
         host_ip="127.0.0.1",
         interface=None,
-        epson_printer_ip=None,
+        scanner_ip=None,
+        max_post_bytes=100 * 1024 * 1024,
         wsd_subscribe_enabled=False,
         wsd_subscribe_interval_seconds=60,
         uuid_file=tmp_path / "uuid",
@@ -60,6 +61,26 @@ def test_http_post_soap_get(tmp_path: Path) -> None:
     assert list((tmp_path / "dumps").glob("http-post-*.xml"))
 
 
+def test_http_healthz(tmp_path: Path) -> None:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(_config(tmp_path)))
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+
+    try:
+        conn = HTTPConnection("127.0.0.1", port, timeout=5)
+        conn.request("GET", "/healthz")
+        response = conn.getresponse()
+        body = response.read()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert response.status == 200
+    assert body == b"ok\n"
+
+
 def test_http_post_binary_payload_writes_scan(tmp_path: Path) -> None:
     server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(_config(tmp_path)))
     thread = Thread(target=server.serve_forever, daemon=True)
@@ -91,6 +112,58 @@ def test_read_chunked_body() -> None:
     stream = BytesIO(b"4\r\n<s:E\r\n4\r\nvent\r\n0\r\n\r\n")
 
     assert read_chunked_body(stream) == b"<s:Event"
+
+
+def test_read_chunked_body_enforces_max_bytes() -> None:
+    stream = BytesIO(b"4\r\n<s:E\r\n4\r\nvent\r\n0\r\n\r\n")
+
+    try:
+        read_chunked_body(stream, max_bytes=4)
+    except ValueError as exc:
+        assert "exceeds" in str(exc)
+    else:
+        raise AssertionError("expected ValueError")
+
+
+def test_http_post_rejects_large_payload(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    config = Config(
+        device_name=config.device_name,
+        endpoint_uuid=config.endpoint_uuid,
+        http_port=config.http_port,
+        output_dir=config.output_dir,
+        debug=config.debug,
+        raw_dump_dir=config.raw_dump_dir,
+        log_level=config.log_level,
+        host_ip=config.host_ip,
+        interface=config.interface,
+        scanner_ip=config.scanner_ip,
+        max_post_bytes=4,
+        wsd_subscribe_enabled=config.wsd_subscribe_enabled,
+        wsd_subscribe_interval_seconds=config.wsd_subscribe_interval_seconds,
+        uuid_file=config.uuid_file,
+    )
+    server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(config))
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+
+    try:
+        conn = HTTPConnection("127.0.0.1", port, timeout=5)
+        conn.request(
+            "POST",
+            "/scanner",
+            body=b"12345",
+            headers={"Content-Type": "application/octet-stream"},
+        )
+        response = conn.getresponse()
+        response.read()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert response.status == 413
 
 
 def test_http_post_chunked_scan_available_event(tmp_path: Path) -> None:

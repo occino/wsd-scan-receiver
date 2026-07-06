@@ -75,6 +75,8 @@ def test_config_from_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
     monkeypatch.setenv("OUTPUT_DIR", str(tmp_path / "consume"))
     monkeypatch.setenv("RAW_DUMP_DIR", str(tmp_path / "dumps"))
     monkeypatch.setenv("DEBUG", "true")
+    monkeypatch.setenv("WSD_SCANNER_IP", "192.0.2.21")
+    monkeypatch.setenv("MAX_POST_BYTES", "1024")
 
     config = Config.from_env()
 
@@ -83,6 +85,8 @@ def test_config_from_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
     assert config.debug is True
     assert config.host_ip == "192.0.2.10"
     assert config.metadata_url == "http://192.0.2.10:9999/metadata"
+    assert config.scanner_ip == "192.0.2.21"
+    assert config.max_post_bytes == 1024
     assert config.wsd_subscribe_enabled is False
     assert config.wsd_subscribe_interval_seconds == 60
 
@@ -99,3 +103,36 @@ def test_config_from_env_wsd_subscribe(
 
     assert config.wsd_subscribe_enabled is True
     assert config.wsd_subscribe_interval_seconds == 15
+
+
+def test_config_from_env_accepts_legacy_epson_printer_ip(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("WSD_HOST", "192.0.2.10")
+    monkeypatch.setenv("WSD_UUID_FILE", str(tmp_path / "uuid"))
+    monkeypatch.delenv("WSD_SCANNER_IP", raising=False)
+    monkeypatch.setenv("EPSON_PRINTER_IP", "192.0.2.21")
+
+    config = Config.from_env()
+
+    assert config.scanner_ip == "192.0.2.21"
+
+
+def test_config_rejects_empty_device_name(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("WSD_HOST", "192.0.2.10")
+    monkeypatch.setenv("WSD_UUID_FILE", str(tmp_path / "uuid"))
+    monkeypatch.setenv("WSD_DEVICE_NAME", " ")
+
+    with pytest.raises(ValueError, match="WSD_DEVICE_NAME"):
+        Config.from_env()
+
+
+def test_config_rejects_invalid_port(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("WSD_HOST", "192.0.2.10")
+    monkeypatch.setenv("WSD_UUID_FILE", str(tmp_path / "uuid"))
+    monkeypatch.setenv("WSD_HTTP_PORT", "99999")
+
+    with pytest.raises(ValueError, match="WSD_HTTP_PORT"):
+        Config.from_env()

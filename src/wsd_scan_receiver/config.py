@@ -26,6 +26,20 @@ def _env_int(name: str, default: int) -> int:
         raise ValueError(f"{name} must be an integer, got {raw!r}") from exc
 
 
+def _env_positive_int(name: str, default: int) -> int:
+    value = _env_int(name, default)
+    if value <= 0:
+        raise ValueError(f"{name} must be greater than zero, got {value!r}")
+    return value
+
+
+def _env_port(name: str, default: int) -> int:
+    value = _env_int(name, default)
+    if not 1 <= value <= 65535:
+        raise ValueError(f"{name} must be a TCP port from 1 to 65535, got {value!r}")
+    return value
+
+
 def detect_host_ip() -> str:
     """Best-effort local address detection for XAddrs in discovery responses."""
     override = os.getenv("WSD_HOST")
@@ -40,6 +54,11 @@ def detect_host_ip() -> str:
         return socket.gethostbyname(socket.gethostname())
     finally:
         sock.close()
+
+
+def configured_scanner_ip() -> str | None:
+    """Return an optional scanner IP used for directed WSD probing."""
+    return os.getenv("WSD_SCANNER_IP") or os.getenv("EPSON_PRINTER_IP") or None
 
 
 def normalize_endpoint_uuid(value: str) -> str:
@@ -87,9 +106,10 @@ class Config:
     log_level: str
     host_ip: str
     interface: str | None
-    epson_printer_ip: str | None
+    scanner_ip: str | None
     wsd_subscribe_enabled: bool
     wsd_subscribe_interval_seconds: int
+    max_post_bytes: int
     uuid_file: Path
 
     @property
@@ -103,21 +123,28 @@ class Config:
     @classmethod
     def from_env(cls) -> Config:
         uuid_file = Path(os.getenv("WSD_UUID_FILE", "/data/wsd-uuid"))
+        device_name = os.getenv("WSD_DEVICE_NAME", "Paperless WSD Scanner").strip()
+        if not device_name:
+            raise ValueError("WSD_DEVICE_NAME must not be empty")
         return cls(
-            device_name=os.getenv("WSD_DEVICE_NAME", "Paperless WSD Scanner"),
+            device_name=device_name,
             endpoint_uuid=load_or_create_uuid(uuid_file),
-            http_port=_env_int("WSD_HTTP_PORT", 5357),
+            http_port=_env_port("WSD_HTTP_PORT", 5357),
             output_dir=Path(os.getenv("OUTPUT_DIR", "/consume")),
             debug=parse_bool(os.getenv("DEBUG"), default=False),
             raw_dump_dir=Path(os.getenv("RAW_DUMP_DIR", "/debug-dumps")),
             log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
             host_ip=detect_host_ip(),
             interface=os.getenv("WSD_INTERFACE") or None,
-            epson_printer_ip=os.getenv("EPSON_PRINTER_IP") or None,
+            scanner_ip=configured_scanner_ip(),
             wsd_subscribe_enabled=parse_bool(
                 os.getenv("WSD_SUBSCRIBE_ENABLED"),
                 default=False,
             ),
-            wsd_subscribe_interval_seconds=_env_int("WSD_SUBSCRIBE_INTERVAL_SECONDS", 60),
+            wsd_subscribe_interval_seconds=_env_positive_int(
+                "WSD_SUBSCRIBE_INTERVAL_SECONDS",
+                60,
+            ),
+            max_post_bytes=_env_positive_int("MAX_POST_BYTES", 100 * 1024 * 1024),
             uuid_file=uuid_file,
         )

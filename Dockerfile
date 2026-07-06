@@ -26,4 +26,7 @@ USER wsd
 EXPOSE 5357/tcp
 EXPOSE 3702/udp
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import os; from urllib.request import urlopen; urlopen(f'http://127.0.0.1:{os.getenv(\"WSD_HTTP_PORT\", \"5357\")}/healthz', timeout=3).read()"
+
 ENTRYPOINT ["wsd-scan-receiver"]

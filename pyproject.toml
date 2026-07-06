@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "wsd-scan-receiver"
 version = "0.1.0"
-description = "Experimental self-hosted WSD/WS-Scan push receiver for network scanners"
+description = "Self-hosted WSD/WS-Scan push receiver for network scanners"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }

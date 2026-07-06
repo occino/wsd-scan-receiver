@@ -23,7 +23,8 @@ def _config(tmp_path: Path) -> Config:
         log_level="INFO",
         host_ip="127.0.0.1",
         interface=None,
-        epson_printer_ip=None,
+        scanner_ip=None,
+        max_post_bytes=100 * 1024 * 1024,
         wsd_subscribe_enabled=False,
         wsd_subscribe_interval_seconds=60,
         uuid_file=tmp_path / "uuid",
@@ -101,3 +102,20 @@ def test_route_scan_available_event(tmp_path: Path) -> None:
     assert status == 202
     assert body == b""
     assert content_type.startswith("application/soap+xml")
+
+
+def test_route_create_scan_job_to_receiver_is_unsupported(tmp_path: Path) -> None:
+    payload = f"""<s:Envelope xmlns:s="{SOAP12}" xmlns:a="{WSA}" xmlns:wscn="http://schemas.microsoft.com/windows/2006/08/wdp/scan">
+  <s:Header>
+    <a:Action>http://schemas.microsoft.com/windows/2006/08/wdp/scan/CreateScanJob</a:Action>
+    <a:MessageID>uuid:create</a:MessageID>
+  </s:Header>
+  <s:Body><wscn:CreateScanJobRequest /></s:Body>
+</s:Envelope>""".encode()
+
+    status, body, content_type = route_soap_request(parse_soap_envelope(payload), _config(tmp_path))
+
+    assert status == 500
+    assert content_type.startswith("application/soap+xml")
+    assert b"Unsupported WSD action" in body
+    assert b"experimental-job" not in body

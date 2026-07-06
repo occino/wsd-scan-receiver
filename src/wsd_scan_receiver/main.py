@@ -23,7 +23,7 @@ def run() -> None:
         config.raw_dump_dir.mkdir(parents=True, exist_ok=True)
 
     LOGGER.info(
-        "starting experimental WSD scan receiver",
+        "starting WSD scan receiver",
         extra={
             "device_name": config.device_name,
             "endpoint_uuid": config.endpoint_uuid,
@@ -33,6 +33,7 @@ def run() -> None:
             "raw_dump_dir": str(config.raw_dump_dir),
             "host_ip": config.host_ip,
             "metadata_url": config.metadata_url,
+            "max_post_bytes": config.max_post_bytes,
         },
     )
     LOGGER.warning(

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 import socket
+import tempfile
 import threading
 import uuid
 from collections.abc import Callable
@@ -76,13 +77,22 @@ def is_probably_soap(content_type: str, payload: bytes) -> bool:
 def write_payload(directory: Path, prefix: str, suffix: str, payload: bytes) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / timestamped_name(prefix, suffix)
-    path.write_bytes(payload)
+    with tempfile.NamedTemporaryFile(
+        dir=directory,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as handle:
+        handle.write(payload)
+        tmp_path = Path(handle.name)
+    tmp_path.replace(path)
     return path
 
 
-def read_chunked_body(stream: BufferedIOBase) -> bytes:
+def read_chunked_body(stream: BufferedIOBase, *, max_bytes: int | None = None) -> bytes:
     """Read an HTTP/1.1 chunked request body from a handler rfile stream."""
     chunks: list[bytes] = []
+    total = 0
     while True:
         size_line = stream.readline()
         if not size_line:
@@ -98,6 +108,9 @@ def read_chunked_body(stream: BufferedIOBase) -> bytes:
                 if trailer in {b"", b"\r\n", b"\n"}:
                     break
             return b"".join(chunks)
+        total += size
+        if max_bytes is not None and total > max_bytes:
+            raise ValueError(f"chunked request body exceeds {max_bytes} bytes")
         chunks.append(stream.read(size))
         line_end = stream.read(2)
         if line_end != b"\r\n":
@@ -115,6 +128,9 @@ class WsdRequestHandler(BaseHTTPRequestHandler):
         LOGGER.info("http request", extra={"peer": self.client_address[0], "line": fmt % args})
 
     def do_GET(self) -> None:  # noqa: N802
+        if self.path == "/healthz":
+            self._send(HTTPStatus.OK, b"ok\n", "text/plain; charset=utf-8")
+            return
         if self.path in {"/", "/metadata", "/device", "/scanner"}:
             body = soap_envelope(
                 "http://schemas.xmlsoap.org/ws/2004/09/transfer/GetResponse",
@@ -129,9 +145,23 @@ class WsdRequestHandler(BaseHTTPRequestHandler):
         transfer_encoding = self.headers.get("Transfer-Encoding", "")
         try:
             if "chunked" in transfer_encoding.lower():
-                payload = read_chunked_body(self.rfile)
+                payload = read_chunked_body(self.rfile, max_bytes=self.config.max_post_bytes)
             else:
                 content_length = int(self.headers.get("Content-Length", "0"))
+                if content_length > self.config.max_post_bytes:
+                    LOGGER.warning(
+                        "HTTP POST body too large",
+                        extra={
+                            "content_length": content_length,
+                            "max_post_bytes": self.config.max_post_bytes,
+                        },
+                    )
+                    self._send(
+                        HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                        b"request body too large\n",
+                        "text/plain; charset=utf-8",
+                    )
+                    return
                 payload = self.rfile.read(content_length)
         except (OSError, ValueError) as exc:
             LOGGER.warning("failed to read HTTP POST body", extra={"error": str(exc)})
@@ -155,10 +185,7 @@ class WsdRequestHandler(BaseHTTPRequestHandler):
                     "bytes": len(payload),
                 },
             )
-            LOGGER.debug(
-                "incoming SOAP or payload body",
-                extra={"payload": payload.decode("utf-8", "replace")},
-            )
+            LOGGER.debug("incoming POST captured", extra={"bytes": len(payload)})
 
         if is_probably_soap(content_type, payload):
             self._handle_soap(payload)

@@ -1,38 +1,86 @@
-# epson-scan-receiver
+# WSD Scan Receiver
 
-Experimental self-hosted WSD/WS-Scan push receiver for network scanners.
+Self-hosted WSD/WS-Scan push receiver for network scanners.
 
-The goal is to make a small Docker service appear on the LAN as a "Scan to
-Computer (WSD)" target. When a scanner such as an Epson ET-2750 can push a scan
-to it, the service saves the resulting payload into a configurable directory,
-for example a Paperless-ngx consume folder.
+The service appears on the LAN as a "Scan to Computer (WSD)" destination and
+saves received scans into a configurable directory, typically the Paperless-ngx
+consume folder. It is designed to run in Docker with host networking.
 
 ## Status
 
-This project is intentionally experimental.
+This project is usable, but WSD push scanning is vendor-sensitive. It has been
+developed against an Epson ET-2750 and should still be treated as experimental
+for other models and firmware versions.
 
-Implemented today:
+Implemented:
 
-- UDP WS-Discovery listener on port `3702`
-- Basic WS-Discovery `Probe` parsing and `ProbeMatches` responses
-- HTTP SOAP/DPWS endpoint on port `5357`
-- Basic metadata responses for WS-Transfer and WS-MetadataExchange requests
-- WS-Eventing `Subscribe` for `ScanAvailableEvent` destinations
-- WS-Scan push flow: receive `ScanAvailableEvent`, send `CreateScanJob`, then
-  fetch the image with `RetrieveImage`
+- WS-Discovery listener on UDP `3702`
+- WS-Discovery `Hello`, `Probe`, and `Resolve` handling
+- HTTP SOAP/DPWS endpoint on TCP `5357`
+- DPWS metadata responses for WS-Transfer and WS-MetadataExchange
+- Active WS-Eventing subscription to scanner `ScanAvailableEvent` notifications
+- WS-Scan push flow: `ScanAvailableEvent` -> `CreateScanJob` -> `RetrieveImage`
 - MTOM/XOP multipart image extraction
-- Epson ET-2750-compatible default scan ticket values discovered through WSD
-- Raw POST dumps in debug mode
-- Direct binary/PDF/image POST payload storage in `OUTPUT_DIR`
+- Direct PDF/JPEG/PNG/TIFF payload storage
+- Stable persisted WSD UUID
+- Structured JSON logging
+- Debug dumps for incoming POSTs, outgoing SOAP requests, image retrieval
+  responses, and SOAP error responses
+- Health endpoint at `/healthz`
 
-Not guaranteed yet:
+Known limits:
 
-- Full compatibility with any scanner model or firmware
-- Vendor-specific Epson behavior
-- Automatic profile negotiation beyond the current conservative defaults
+- Full WSD/WS-Scan compatibility is not guaranteed.
+- Scanner profile negotiation is intentionally conservative.
+- Current default scan ticket values are based on an Epson ET-2750 WSD capture.
+- Multi-page jobs and richer job status tracking are not fully implemented.
+- The service is intended for trusted LANs, not direct exposure to the internet.
 
-WSD push behavior varies by scanner and vendor. Real compatibility will likely
-need packet captures from the scanner you want to support.
+## Quick Start
+
+Copy and edit the environment file:
+
+```bash
+cp .env.example .env
+```
+
+Set at least:
+
+```dotenv
+CONSUME_DIR=/path/to/paperless/consume
+WSD_DEVICE_NAME=Paperless
+WSD_HOST=192.168.0.8
+WSD_INTERFACE=ens16
+WSD_SUBSCRIBE_ENABLED=true
+WSD_SCANNER_IP=192.168.0.21
+```
+
+Start the service:
+
+```bash
+docker compose up --build -d
+```
+
+Check status:
+
+```bash
+docker compose ps
+docker compose logs -f
+curl http://127.0.0.1:5357/healthz
+```
+
+## Docker Networking
+
+The compose file uses `network_mode: host` intentionally. WS-Discovery relies on
+multicast traffic to `239.255.255.250:3702` and, on some networks, IPv6
+link-local multicast. Docker bridge networking often prevents scanners on the
+LAN from seeing the receiver.
+
+Required traffic:
+
+- UDP `3702` inbound and outbound for WS-Discovery
+- TCP `5357` inbound from the scanner for SOAP/DPWS callbacks
+- HTTP from the receiver to the scanner for WS-Eventing and WS-Scan requests
 
 ## Configuration
 
@@ -40,168 +88,148 @@ Environment variables:
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `WSD_DEVICE_NAME` | `Paperless WSD Scanner` | Name shown to scanners during discovery |
-| `WSD_HOSTNAME` | `paperless-wsd` | Docker container hostname |
-| `WSD_UUID` | generated | Stable WSD endpoint UUID; preferred format is `urn:uuid:<uuid>`; persisted in `/data/wsd-uuid` when possible |
-| `WSD_UUID_FILE` | `/data/wsd-uuid` | File used for generated UUID persistence |
-| `WSD_HTTP_PORT` | `5357` | TCP port for SOAP/DPWS HTTP requests |
-| `OUTPUT_DIR` | `/consume` | Directory where received scan payloads are written |
-| `DEBUG` | `false` | Enables verbose SOAP/discovery logging and raw POST dumps |
-| `RAW_DUMP_DIR` | `/debug-dumps` | Directory for debug dumps |
+| `WSD_DEVICE_NAME` | `Paperless WSD Scanner` | Name shown on the scanner |
+| `WSD_HOSTNAME` | `paperless-wsd` | Container hostname used by Compose |
+| `WSD_UUID` | generated | Stable endpoint ID, preferred format `urn:uuid:<uuid>` |
+| `WSD_UUID_FILE` | `/data/wsd-uuid` | File used to persist generated UUID |
+| `WSD_HTTP_PORT` | `5357` | TCP SOAP/DPWS HTTP port |
+| `OUTPUT_DIR` | `/consume` | Directory where scans are written |
+| `WSD_HOST` | auto-detected | IP advertised in WSD `XAddrs`; set this on multi-homed hosts |
+| `WSD_INTERFACE` | unset | LAN interface for IPv6 WS-Discovery, for example `ens16` |
+| `WSD_SUBSCRIBE_ENABLED` | `false` | Actively subscribe this receiver as a WSD scan destination |
+| `WSD_SUBSCRIBE_INTERVAL_SECONDS` | `60` | Probe/subscription refresh interval |
+| `WSD_SCANNER_IP` | unset | Optional scanner IP for directed WSD probing when multicast is unreliable |
+| `MAX_POST_BYTES` | `104857600` | Maximum accepted incoming HTTP POST size |
+| `DEBUG` | `false` | Enables verbose discovery/SOAP logging and raw dumps |
+| `RAW_DUMP_DIR` | `/debug-dumps` | Debug dump directory |
 | `LOG_LEVEL` | `INFO` | Python log level |
-| `WSD_HOST` | auto-detected | Optional override for the IP advertised in discovery `XAddrs` |
-| `WSD_INTERFACE` | unset | Optional LAN interface for IPv6 WS-Discovery multicast, for example `ens16` |
-| `WSD_SUBSCRIBE_ENABLED` | `false` | Experimental: actively probes WSD scanners and tries WS-Eventing subscription |
-| `WSD_SUBSCRIBE_INTERVAL_SECONDS` | `60` | Interval for active WSD scan-device probes/subscription attempts |
-| `EPSON_PRINTER_IP` | unset | Optional Epson device IP for directed WSD discovery when multicast discovery is unreliable |
 
-The compose file also reads `PUID` and `PGID` from `.env` so files written to
-bind-mounted directories are owned by a useful host user.
+`EPSON_PRINTER_IP` is still accepted by the application as a legacy fallback,
+but new deployments should use `WSD_SCANNER_IP`.
 
-## Run With Docker Compose
+Compose-specific `.env` variables:
 
-Copy the example environment file and adjust the host paths:
+| Variable | Default | Description |
+| --- | --- | --- |
+| `CONSUME_DIR` | `./consume` | Host directory mounted as `/consume` |
+| `DEBUG_DUMPS_DIR` | `./debug-dumps` | Host directory mounted as `/debug-dumps` |
+| `DATA_DIR` | `./data` | Host directory mounted as `/data` |
+| `PUID` | `1000` | Container user ID for file writes |
+| `PGID` | `1000` | Container group ID for file writes |
+| `WSD_DEBUG` | `false` | Compose-friendly alias passed to application `DEBUG` |
 
-```bash
-cp .env.example .env
-```
+## Paperless-ngx
 
-```bash
-docker compose up --build
-```
-
-The compose file uses `network_mode: host`. WS-Discovery relies on UDP multicast
-to `239.255.255.250:3702`, and host networking avoids the common Docker bridge
-network issue where multicast from the LAN never reaches the container.
-
-The default compose file mounts:
-
-- `./consume:/consume`
-- `./debug-dumps:/debug-dumps`
-- `./data:/data`
-
-To feed Paperless-ngx directly, set `CONSUME_DIR` in `.env`:
+Point `CONSUME_DIR` at a Paperless-ngx consume directory:
 
 ```dotenv
-CONSUME_DIR=/path/to/paperless/consume
-DEBUG_DUMPS_DIR=./debug-dumps
-DATA_DIR=./data
+CONSUME_DIR=/srv/paperless/consume
 PUID=1000
 PGID=1000
-WSD_DEVICE_NAME=Paperless WSD Scanner
-WSD_HOSTNAME=paperless-wsd
-WSD_HOST=
-WSD_INTERFACE=
-WSD_SUBSCRIBE_ENABLED=false
-WSD_SUBSCRIBE_INTERVAL_SECONDS=60
-EPSON_PRINTER_IP=
-WSD_DEBUG=false
-LOG_LEVEL=INFO
 ```
+
+The receiver writes timestamped files such as `scan-20260706T170000.000000Z-abc12345.jpg`.
+Paperless-ngx should import them on its normal consume schedule. If files appear
+but Paperless does not consume them, check ownership and Paperless logs.
 
 ## How It Works
 
-The service starts two listeners:
+The service has three cooperating parts:
 
-- UDP `3702` for WS-Discovery `Probe` messages
-- TCP `5357` for HTTP SOAP/DPWS requests
+- `discovery.py` advertises the computer destination with WS-Discovery.
+- `receiver.py` serves DPWS metadata, receives scanner events, and stores direct
+  binary payloads.
+- `ws_scan_client.py` actively discovers scanner services, subscribes to scan
+  events, creates scan jobs, retrieves images, and stores extracted image parts.
 
-When `WSD_SUBSCRIBE_ENABLED=true`, it also behaves like an experimental WSD scan
-client: it sends active scan-device probes and attempts a WS-Eventing
-`Subscribe` to discovered scanner service addresses. This is the path Windows
-uses before a scanner can send `ScanAvailableEvent` push notifications.
+Most successful push scans follow this flow:
 
-When a scanner posts `ScanAvailableEvent`, the receiver starts the WS-Scan
-client-side job flow: `CreateScanJob` echoes the scanner's `ScanIdentifier` and
-the subscription's `DestinationToken`, then `RetrieveImage` fetches the scanned
-image. Epson ET-2750 testing showed the device accepts `exif` scan output and
-returns a JPEG/Exif payload in a multipart XOP response.
+1. The receiver announces itself and responds to discovery probes.
+2. The active client subscribes to the scanner's `ScanAvailableEvent`.
+3. The scanner shows `WSD_DEVICE_NAME` in its "Scan to Computer (WSD)" menu.
+4. The scanner posts a `ScanAvailableEvent` to `/events`.
+5. The receiver sends `CreateScanJob` to the scanner.
+6. The receiver sends `RetrieveImage` and stores the returned image payload.
 
-Discovery responses advertise the configured device name and metadata/scanner
-URLs. The HTTP server exposes basic metadata at `/`, `/metadata`, `/device`, and
-`/scanner`, and accepts SOAP or binary POSTs at the same server.
+Unknown SOAP actions return a SOAP fault and are logged. The receiver no longer
+returns fabricated scan jobs for unsupported actions.
 
-If a POST body looks like PDF/JPEG/PNG/TIFF or another binary payload, it is
-saved as `scan-<timestamp>-<id>.<ext>` in `OUTPUT_DIR`.
+## Testing Discovery
 
-If a POST body looks like SOAP/XML, the service parses the SOAP envelope and
-routes known action names. Unknown SOAP actions return a SOAP fault and are
-logged instead of crashing the process.
-
-With `DEBUG=true`, every incoming POST, outgoing SOAP request, RetrieveImage
-response, and SOAP error response is also written to `RAW_DUMP_DIR`.
-
-## Test Discovery
-
-On a Linux host, first start the service with host networking, then watch for
-traffic:
+Watch discovery traffic:
 
 ```bash
 sudo tcpdump -ni any udp port 3702
 ```
 
-You can also send a simple probe with `socat`:
+Send a test probe:
 
 ```bash
 socat - UDP-DATAGRAM:239.255.255.250:3702,ip-multicast-ttl=2 < examples/wsd-probe.xml
 ```
 
-In another terminal:
+In the tcpdump output you should see a `ProbeMatches` response from the service.
 
-```bash
-sudo tcpdump -Ani any udp port 3702
-```
+## Capturing Traffic
 
-You should see a `ProbeMatches` response from the service.
-
-## Capture Scanner Traffic
-
-For Wireshark or tcpdump analysis:
+Capture the WSD flow while opening the scanner's WSD menu or starting a scan:
 
 ```bash
 sudo tcpdump -i any -w wsd-scan.pcap 'udp port 3702 or tcp port 5357'
 ```
 
-Then try `Scan -> To Computer (WSD)` on the scanner. Useful things to look for:
+Useful things to inspect in Wireshark:
 
-- Whether the scanner sends a `Probe` and receives `ProbeMatches`
-- Which `Types`, `Scopes`, and `XAddrs` it expects
-- Which SOAP `Action` headers it sends
-- Whether scan data is sent as a plain HTTP payload, SOAP body content, or
-  MTOM/XOP attachment
+- Whether scanner probes or hello packets arrive on the host
+- Which discovery namespace, types, scopes, and XAddrs the scanner uses
+- Whether the receiver subscribes successfully
+- Whether the scanner posts `ScanAvailableEvent`
+- Whether `CreateScanJob` and `RetrieveImage` receive successful responses
+- Whether image data is plain binary, SOAP body content, or MTOM/XOP multipart
 
-Set `DEBUG=true` while capturing so the service writes raw POST bodies to
-`RAW_DUMP_DIR` as well.
+For deeper analysis set:
+
+```dotenv
+WSD_DEBUG=true
+```
+
+Debug mode writes raw bodies to `DEBUG_DUMPS_DIR`. These files may contain scan
+content and device identifiers, so handle them as private data.
 
 ## Troubleshooting
 
-Scanner does not see the target:
+Scanner does not show the receiver:
 
-- Use host networking on Docker.
-- Confirm UDP `3702` is allowed by the host firewall.
-- Confirm the scanner and Docker host are on the same LAN/VLAN.
-- Set `WSD_HOST` if logs show the service advertising the wrong IP address.
-- Run `tcpdump -ni any udp port 3702` and confirm probes arrive.
+- Use Docker host networking.
+- Confirm scanner and host are in the same LAN/VLAN.
+- Allow UDP `3702` in the host firewall.
+- Set `WSD_HOST` to the host's LAN IP if the advertised URL is wrong.
+- Set `WSD_INTERFACE` to the LAN interface for IPv6 discovery.
+- Enable `WSD_SUBSCRIBE_ENABLED=true`; many scanners only show subscribed
+  destinations.
+- Set `WSD_SCANNER_IP` if multicast discovery from the scanner is unreliable.
+- Restart the scanner after changing discovery or subscription settings.
 
-Discovery works, but no scan payload arrives:
+Receiver appears, but scan does not complete:
 
 - Confirm TCP `5357` is reachable from the scanner.
-- Check the logs for SOAP faults or unknown actions.
-- Enable `DEBUG=true` and inspect `debug-dumps/`.
-- Capture `udp port 3702 or tcp port 5357` and compare the scanner's expected
-  flow with the implemented handlers.
+- Check logs for `ScanAvailableEvent`, `CreateScanJob`, and `RetrieveImage`.
+- Enable `WSD_DEBUG=true` and inspect debug dumps.
+- Capture `udp port 3702 or tcp port 5357` and compare the flow with the logs.
+- Increase `MAX_POST_BYTES` if the scan payload is larger than the default.
 
 Files are not written:
 
-- Confirm the mounted consume directory is writable by the container user.
-- Check `OUTPUT_DIR` and compose volume paths.
-- Temporarily run with `DEBUG=true` to see whether POST bodies arrive at all.
+- Confirm `CONSUME_DIR` exists and is writable by `PUID:PGID`.
+- Check container logs for permission errors.
+- Confirm `/healthz` responds.
+- Temporarily enable `WSD_DEBUG=true` to verify that HTTP POSTs arrive.
 
-Paperless-ngx does not consume files:
+Duplicate devices on the scanner:
 
-- Mount Paperless-ngx's consume directory as `/consume`.
-- Confirm Paperless has permission to read files created by this container.
-- Check Paperless logs separately after a file appears in `/consume`.
+- Use a stable `WSD_UUID` or persist `/data`.
+- Avoid running multiple receiver instances on the same LAN.
+- Restart the scanner to clear stale WSD destinations.
 
 ## Development
 
@@ -219,18 +247,22 @@ Run locally:
 
 ```bash
 DEBUG=true OUTPUT_DIR=./consume RAW_DUMP_DIR=./debug-dumps WSD_HOST=<your-lan-ip> \
+  WSD_SUBSCRIBE_ENABLED=true WSD_SCANNER_IP=<scanner-ip> \
   python -m wsd_scan_receiver.main
 ```
 
-The protocol modules are split by responsibility:
+Before opening a pull request or cutting a release:
 
-- `discovery.py`: WS-Discovery UDP listener and `ProbeMatches` generation
-- `soap.py`: SOAP envelope parsing and action routing
-- `receiver.py`: HTTP server, metadata endpoints, raw dumps, payload writes
-- `config.py`: environment parsing and UUID/IP handling
+```bash
+pytest
+ruff check .
+python -m compileall src tests
+docker compose up --build -d --force-recreate --remove-orphans
+```
 
 Good next extensions:
 
-- Add handlers based on real Epson ET-2750 captures.
-- Persist richer job state for status and multi-page retrieval flows.
-- Add configurable advertised scopes/types if another scanner expects them.
+- Configurable scan ticket profiles for resolution, color mode, and document size.
+- Multi-page job retrieval and richer status tracking.
+- Metrics endpoint for subscriptions, scan jobs, and failures.
+- Integration tests around recorded scanner SOAP fixtures.
