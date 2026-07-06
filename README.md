@@ -20,7 +20,7 @@ Implemented:
 - WS-Discovery `Hello`, `Probe`, and `Resolve` handling
 - HTTP SOAP/DPWS endpoint on TCP `5357`
 - Web UI for scan ticket settings on TCP `8888` by default
-- Optional document cropping with automatic, fixed DIN-A4, and disabled modes
+- Optional document cropping with automatic, fixed paper-format, and disabled modes
 - DPWS metadata responses for WS-Transfer and WS-MetadataExchange
 - Active WS-Eventing subscription to scanner `ScanAvailableEvent` notifications
 - WS-Scan push flow: `ScanAvailableEvent` -> `CreateScanJob` -> `RetrieveImage`
@@ -170,14 +170,14 @@ stored unchanged.
 
 The crop behavior assumes the document is aligned with the top-left scanner bed
 corner. In `none` mode no cropping is applied. In `auto` mode it detects the
-free side and bottom edges, then keeps the fixed top-left corner anchored. In
-`DIN-A4` mode it crops a fixed top-left A4 rectangle. The parameters below
-`Crop mode` are only used for `auto` mode and are hidden in the web UI unless
-`auto` is selected:
+free side and bottom edges, then keeps the fixed top-left corner anchored. Fixed
+paper-format modes crop a top-left rectangle with the selected paper aspect
+ratio. The parameters below `Crop mode` are only used for `auto` mode and are
+hidden in the web UI unless `auto` is selected:
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `Crop mode` | `DIN-A4` | `none` skips cropping, `auto` uses automatic document detection, `DIN-A4` crops a fixed A4 rectangle |
+| `Crop mode` | `DIN-A4` | `none` skips cropping, `auto` uses automatic document detection, fixed modes crop by paper aspect ratio. Supported fixed modes: `DIN-A4`, `DIN-A5`, `DIN-A6`, `DIN-Lang`, `C5`, `C6`, `US-Letter` |
 | `Background threshold` | `220` | Auto mode only: corner brightness at or above this value disables auto-cropping |
 | `Document contrast` | `35` | Auto mode only: brightness difference from the detected background needed to identify the document |
 | `Minimum document width (%)` | `50` | Auto mode only: ignore detected crop boxes narrower than this share of the image |

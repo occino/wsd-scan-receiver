@@ -9,14 +9,13 @@ from pathlib import Path
 
 from PIL import Image
 
-from .config import PostProcessingSettings
+from .config import FIXED_CROP_MODE_SIZES_MM, PostProcessingSettings
 
 LOGGER = logging.getLogger(__name__)
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
 TEMP_ROOT = Path("/tmp/wsd-scan-receiver")
 FOREGROUND_PROJECTION_RATIO = 0.005
-DIN_A4_ASPECT_RATIO = 210 / 297
 
 
 def _luminance(pixel: tuple[int, int, int]) -> int:
@@ -111,11 +110,13 @@ def _save_cropped_image(
     cropped.save(path, **save_kwargs)
 
 
-def _din_a4_bbox(width: int, height: int) -> tuple[int, int, int, int]:
-    if width / height > DIN_A4_ASPECT_RATIO:
-        crop_width = max(1, round(height * DIN_A4_ASPECT_RATIO))
+def _fixed_format_bbox(width: int, height: int, crop_mode: str) -> tuple[int, int, int, int]:
+    format_width, format_height = FIXED_CROP_MODE_SIZES_MM[crop_mode]
+    aspect_ratio = format_width / format_height
+    if width / height > aspect_ratio:
+        crop_width = max(1, round(height * aspect_ratio))
         return (0, 0, min(width, crop_width), height)
-    crop_height = max(1, round(width / DIN_A4_ASPECT_RATIO))
+    crop_height = max(1, round(width / aspect_ratio))
     return (0, 0, width, min(height, crop_height))
 
 
@@ -190,8 +191,8 @@ def _crop_document_image(
         if settings.crop_mode == "none":
             return False
 
-        if settings.crop_mode == "DIN-A4":
-            bbox = _din_a4_bbox(image.width, image.height)
+        if settings.crop_mode in FIXED_CROP_MODE_SIZES_MM:
+            bbox = _fixed_format_bbox(image.width, image.height, settings.crop_mode)
             if bbox == (0, 0, image.width, image.height):
                 return False
             cropped = image.crop(bbox)

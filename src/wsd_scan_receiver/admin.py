@@ -14,6 +14,7 @@ from typing import Any
 from urllib.parse import parse_qs
 
 from .config import (
+    FIXED_CROP_MODE_SIZES_MM,
     LOG_LEVELS,
     POST_PROCESSING_FIELDS,
     SCAN_TICKET_ALLOWED_VALUES,
@@ -179,7 +180,7 @@ POST_PROCESSING_FIELD_LABELS = {
 POST_PROCESSING_FIELD_HELP = {
     "crop_mode": (
         "Select none to skip cropping, auto for parameter-based document detection, "
-        "or DIN-A4 for a fixed top-left A4 crop. Values: none, auto, DIN-A4."
+        "or a paper format for a fixed top-left crop."
     ),
     "background_threshold": (
         "Corner brightness at or above this value disables auto-cropping. Range: 0-255."
@@ -337,7 +338,11 @@ def _post_processing_input_for(
 ) -> str:
     label = POST_PROCESSING_FIELD_LABELS[name]
     if name == "crop_mode":
-        control = _select_for(name, str(value), ["none", "auto", "DIN-A4"])
+        control = _select_for(
+            name,
+            str(value),
+            ["none", "auto", *FIXED_CROP_MODE_SIZES_MM.keys()],
+        )
         return _row(label, name, control, POST_PROCESSING_FIELD_HELP[name])
     disabled = "" if crop_mode == "auto" else " disabled"
     css_class = "auto-crop-parameter" if crop_mode == "auto" else "auto-crop-parameter hidden"

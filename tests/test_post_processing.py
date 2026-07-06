@@ -123,6 +123,34 @@ def test_store_scan_payload_uses_fixed_din_a4_crop_mode(tmp_path: Path) -> None:
         assert image.size == (99, 140)
 
 
+def test_store_scan_payload_uses_fixed_din_lang_crop_mode(tmp_path: Path) -> None:
+    out_path = store_scan_payload(
+        tmp_path / "out",
+        "scan",
+        ".png",
+        _wide_scan_bed(),
+        post_processing_settings=PostProcessingSettings(enabled=True, crop_mode="DIN-Lang"),
+        temp_root=tmp_path / "temp",
+    )
+
+    with Image.open(out_path) as image:
+        assert image.size == (70, 140)
+
+
+def test_store_scan_payload_uses_fixed_us_letter_crop_mode(tmp_path: Path) -> None:
+    out_path = store_scan_payload(
+        tmp_path / "out",
+        "scan",
+        ".png",
+        _wide_scan_bed(),
+        post_processing_settings=PostProcessingSettings(enabled=True, crop_mode="US-Letter"),
+        temp_root=tmp_path / "temp",
+    )
+
+    with Image.open(out_path) as image:
+        assert image.size == (108, 140)
+
+
 def test_store_scan_payload_preserves_dpi_after_din_a4_crop(tmp_path: Path) -> None:
     out_path = store_scan_payload(
         tmp_path / "out",

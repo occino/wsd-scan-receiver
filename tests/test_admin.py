@@ -322,6 +322,12 @@ def test_admin_index_uses_english_tables_and_save_button(tmp_path: Path) -> None
     assert 'value="none"' in body
     assert 'value="auto"' in body
     assert 'value="DIN-A4"' in body
+    assert 'value="DIN-A5"' in body
+    assert 'value="DIN-A6"' in body
+    assert 'value="DIN-Lang"' in body
+    assert 'value="C5"' in body
+    assert 'value="C6"' in body
+    assert 'value="US-Letter"' in body
     assert 'class="auto-crop-parameter hidden"' in body
     assert ".auto-crop-parameter.hidden" in body
     assert "const autoCropRows" in body

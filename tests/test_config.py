@@ -5,6 +5,7 @@ import pytest
 
 import wsd_scan_receiver.config as config_module
 from wsd_scan_receiver.config import (
+    FIXED_CROP_MODE_SIZES_MM,
     Config,
     PostProcessingSettingsStore,
     ScanTicketStore,
@@ -311,6 +312,22 @@ def test_load_post_processing_settings_accepts_none_crop_mode(tmp_path: Path) ->
     settings = load_post_processing_settings(config_file)
 
     assert settings.crop_mode == "none"
+
+
+@pytest.mark.parametrize("crop_mode", FIXED_CROP_MODE_SIZES_MM)
+def test_load_post_processing_settings_accepts_fixed_crop_modes(
+    crop_mode: str,
+    tmp_path: Path,
+) -> None:
+    config_file = tmp_path / "config.json"
+    config_file.write_text(
+        json.dumps({"post_processing": {"crop_mode": crop_mode}}),
+        encoding="utf-8",
+    )
+
+    settings = load_post_processing_settings(config_file)
+
+    assert settings.crop_mode == crop_mode
 
 
 def test_load_scan_ticket_config_rejects_invalid_json(tmp_path: Path) -> None:

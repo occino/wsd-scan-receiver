@@ -152,7 +152,16 @@ SERVICE_SETTINGS_FIELDS = {
     "LOG_LEVEL",
 }
 LOG_LEVELS = {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"}
-POST_PROCESSING_CROP_MODES = {"none", "auto", "DIN-A4"}
+FIXED_CROP_MODE_SIZES_MM = {
+    "DIN-A4": (210, 297),
+    "DIN-A5": (148, 210),
+    "DIN-A6": (105, 148),
+    "DIN-Lang": (110, 220),
+    "C5": (162, 229),
+    "C6": (114, 162),
+    "US-Letter": (216, 279),
+}
+POST_PROCESSING_CROP_MODES = {"none", "auto"} | set(FIXED_CROP_MODE_SIZES_MM)
 POST_PROCESSING_FIELDS = {
     "enabled",
     "crop_mode",
