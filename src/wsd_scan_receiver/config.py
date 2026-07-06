@@ -40,6 +40,13 @@ def _env_port(name: str, default: int) -> int:
     return value
 
 
+def _env_text(name: str, default: str) -> str:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return default
+    return value.strip()
+
+
 def detect_host_ip() -> str:
     """Best-effort local address detection for XAddrs in discovery responses."""
     override = os.getenv("WSD_HOST")
@@ -94,6 +101,31 @@ def load_or_create_uuid(uuid_file: Path) -> str:
 
 
 @dataclass(frozen=True)
+class ScanTicketConfig:
+    """Configurable WS-Scan ticket values sent with CreateScanJob."""
+
+    format: str
+    input_source: str
+    content_type: str
+    color_processing: str
+    resolution: int
+    compression_quality: int
+    images_to_transfer: int
+    width: int
+    height: int
+    region_x: int
+    region_y: int
+    region_width: int
+    region_height: int
+    brightness: int
+    contrast: int
+    sharpness: int
+    rotation: int
+    scaling_width: int
+    scaling_height: int
+
+
+@dataclass(frozen=True)
 class Config:
     """Application configuration derived from environment variables."""
 
@@ -110,6 +142,7 @@ class Config:
     wsd_subscribe_enabled: bool
     wsd_subscribe_interval_seconds: int
     max_post_bytes: int
+    scan_ticket: ScanTicketConfig
     uuid_file: Path
 
     @property
@@ -146,5 +179,26 @@ class Config:
                 60,
             ),
             max_post_bytes=_env_positive_int("MAX_POST_BYTES", 100 * 1024 * 1024),
+            scan_ticket=ScanTicketConfig(
+                format=_env_text("SCAN_FORMAT", "exif"),
+                input_source=_env_text("SCAN_INPUT_SOURCE", "Auto"),
+                content_type=_env_text("SCAN_CONTENT_TYPE", "Text"),
+                color_processing=_env_text("SCAN_COLOR_PROCESSING", "RGB24"),
+                resolution=_env_positive_int("SCAN_RESOLUTION", 100),
+                compression_quality=_env_int("SCAN_COMPRESSION_QUALITY", 50),
+                images_to_transfer=_env_positive_int("SCAN_IMAGES_TO_TRANSFER", 1),
+                width=_env_positive_int("SCAN_WIDTH", 8500),
+                height=_env_positive_int("SCAN_HEIGHT", 11700),
+                region_x=_env_int("SCAN_REGION_X", 0),
+                region_y=_env_int("SCAN_REGION_Y", 0),
+                region_width=_env_positive_int("SCAN_REGION_WIDTH", 8500),
+                region_height=_env_positive_int("SCAN_REGION_HEIGHT", 11700),
+                brightness=_env_int("SCAN_BRIGHTNESS", 0),
+                contrast=_env_int("SCAN_CONTRAST", 0),
+                sharpness=_env_int("SCAN_SHARPNESS", 0),
+                rotation=_env_int("SCAN_ROTATION", 0),
+                scaling_width=_env_positive_int("SCAN_SCALING_WIDTH", 100),
+                scaling_height=_env_positive_int("SCAN_SCALING_HEIGHT", 100),
+            ),
             uuid_file=uuid_file,
         )

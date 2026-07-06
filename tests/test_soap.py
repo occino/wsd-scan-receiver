@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from tests.helpers import default_scan_ticket
 from wsd_scan_receiver.config import Config
 from wsd_scan_receiver.soap import (
     MEX,
@@ -27,6 +28,7 @@ def _config(tmp_path: Path) -> Config:
         max_post_bytes=100 * 1024 * 1024,
         wsd_subscribe_enabled=False,
         wsd_subscribe_interval_seconds=60,
+        scan_ticket=default_scan_ticket(),
         uuid_file=tmp_path / "uuid",
     )
 

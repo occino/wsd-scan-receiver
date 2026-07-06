@@ -1,0 +1,25 @@
+from wsd_scan_receiver.config import ScanTicketConfig
+
+
+def default_scan_ticket() -> ScanTicketConfig:
+    return ScanTicketConfig(
+        format="exif",
+        input_source="Auto",
+        content_type="Text",
+        color_processing="RGB24",
+        resolution=100,
+        compression_quality=50,
+        images_to_transfer=1,
+        width=8500,
+        height=11700,
+        region_x=0,
+        region_y=0,
+        region_width=8500,
+        region_height=11700,
+        brightness=0,
+        contrast=0,
+        sharpness=0,
+        rotation=0,
+        scaling_width=100,
+        scaling_height=100,
+    )

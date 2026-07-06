@@ -77,6 +77,25 @@ def test_config_from_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
     monkeypatch.setenv("DEBUG", "true")
     monkeypatch.setenv("WSD_SCANNER_IP", "192.0.2.21")
     monkeypatch.setenv("MAX_POST_BYTES", "1024")
+    monkeypatch.setenv("SCAN_FORMAT", "tiff-single-uncompressed")
+    monkeypatch.setenv("SCAN_INPUT_SOURCE", "Platen")
+    monkeypatch.setenv("SCAN_CONTENT_TYPE", "Photo")
+    monkeypatch.setenv("SCAN_COLOR_PROCESSING", "Grayscale8")
+    monkeypatch.setenv("SCAN_RESOLUTION", "300")
+    monkeypatch.setenv("SCAN_COMPRESSION_QUALITY", "75")
+    monkeypatch.setenv("SCAN_IMAGES_TO_TRANSFER", "2")
+    monkeypatch.setenv("SCAN_WIDTH", "2100")
+    monkeypatch.setenv("SCAN_HEIGHT", "2970")
+    monkeypatch.setenv("SCAN_REGION_X", "10")
+    monkeypatch.setenv("SCAN_REGION_Y", "20")
+    monkeypatch.setenv("SCAN_REGION_WIDTH", "2000")
+    monkeypatch.setenv("SCAN_REGION_HEIGHT", "2900")
+    monkeypatch.setenv("SCAN_BRIGHTNESS", "1")
+    monkeypatch.setenv("SCAN_CONTRAST", "2")
+    monkeypatch.setenv("SCAN_SHARPNESS", "3")
+    monkeypatch.setenv("SCAN_ROTATION", "90")
+    monkeypatch.setenv("SCAN_SCALING_WIDTH", "95")
+    monkeypatch.setenv("SCAN_SCALING_HEIGHT", "96")
 
     config = Config.from_env()
 
@@ -87,6 +106,25 @@ def test_config_from_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
     assert config.metadata_url == "http://192.0.2.10:9999/metadata"
     assert config.scanner_ip == "192.0.2.21"
     assert config.max_post_bytes == 1024
+    assert config.scan_ticket.format == "tiff-single-uncompressed"
+    assert config.scan_ticket.input_source == "Platen"
+    assert config.scan_ticket.content_type == "Photo"
+    assert config.scan_ticket.color_processing == "Grayscale8"
+    assert config.scan_ticket.resolution == 300
+    assert config.scan_ticket.compression_quality == 75
+    assert config.scan_ticket.images_to_transfer == 2
+    assert config.scan_ticket.width == 2100
+    assert config.scan_ticket.height == 2970
+    assert config.scan_ticket.region_x == 10
+    assert config.scan_ticket.region_y == 20
+    assert config.scan_ticket.region_width == 2000
+    assert config.scan_ticket.region_height == 2900
+    assert config.scan_ticket.brightness == 1
+    assert config.scan_ticket.contrast == 2
+    assert config.scan_ticket.sharpness == 3
+    assert config.scan_ticket.rotation == 90
+    assert config.scan_ticket.scaling_width == 95
+    assert config.scan_ticket.scaling_height == 96
     assert config.wsd_subscribe_enabled is False
     assert config.wsd_subscribe_interval_seconds == 60
 
@@ -135,4 +173,15 @@ def test_config_rejects_invalid_port(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     monkeypatch.setenv("WSD_HTTP_PORT", "99999")
 
     with pytest.raises(ValueError, match="WSD_HTTP_PORT"):
+        Config.from_env()
+
+
+def test_config_rejects_invalid_scan_resolution(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("WSD_HOST", "192.0.2.10")
+    monkeypatch.setenv("WSD_UUID_FILE", str(tmp_path / "uuid"))
+    monkeypatch.setenv("SCAN_RESOLUTION", "0")
+
+    with pytest.raises(ValueError, match="SCAN_RESOLUTION"):
         Config.from_env()

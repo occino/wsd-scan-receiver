@@ -22,7 +22,7 @@ from email.parser import BytesParser
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from .config import Config
+from .config import Config, ScanTicketConfig
 from .discovery import (
     DISCOVERY_PORT,
     MULTICAST_GROUP,
@@ -442,11 +442,12 @@ def create_scan_job_xml(
     destination_token: str,
     device_name: str,
     from_endpoint: str,
+    scan_ticket: ScanTicketConfig,
     input_source: str = "",
 ) -> bytes:
     """Build a WS-Scan CreateScanJobRequest after a push ScanAvailableEvent."""
     message_id = f"urn:uuid:{uuid.uuid4()}"
-    source = input_source or "Auto"
+    source = input_source or scan_ticket.input_source
     xml = f"""<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope
     xmlns:s="{SOAP12}"
@@ -474,54 +475,54 @@ def create_scan_job_xml(
           <wscn:JobInformation>Device initiated scan</wscn:JobInformation>
         </wscn:JobDescription>
         <wscn:DocumentParameters>
-          <wscn:Format>exif</wscn:Format>
-          <wscn:CompressionQualityFactor>50</wscn:CompressionQualityFactor>
-          <wscn:ImagesToTransfer>1</wscn:ImagesToTransfer>
+          <wscn:Format>{html.escape(scan_ticket.format)}</wscn:Format>
+          <wscn:CompressionQualityFactor>{scan_ticket.compression_quality}</wscn:CompressionQualityFactor>
+          <wscn:ImagesToTransfer>{scan_ticket.images_to_transfer}</wscn:ImagesToTransfer>
           <wscn:InputSource>{html.escape(source)}</wscn:InputSource>
-          <wscn:ContentType>Text</wscn:ContentType>
+          <wscn:ContentType>{html.escape(scan_ticket.content_type)}</wscn:ContentType>
           <wscn:InputSize>
             <wscn:InputMediaSize>
-              <wscn:Width>8500</wscn:Width>
-              <wscn:Height>11700</wscn:Height>
+              <wscn:Width>{scan_ticket.width}</wscn:Width>
+              <wscn:Height>{scan_ticket.height}</wscn:Height>
             </wscn:InputMediaSize>
           </wscn:InputSize>
           <wscn:Exposure>
             <wscn:ExposureSettings>
-              <wscn:Contrast>0</wscn:Contrast>
-              <wscn:Brightness>0</wscn:Brightness>
-              <wscn:Sharpness>0</wscn:Sharpness>
+              <wscn:Contrast>{scan_ticket.contrast}</wscn:Contrast>
+              <wscn:Brightness>{scan_ticket.brightness}</wscn:Brightness>
+              <wscn:Sharpness>{scan_ticket.sharpness}</wscn:Sharpness>
             </wscn:ExposureSettings>
           </wscn:Exposure>
           <wscn:Scaling>
-            <wscn:ScalingWidth>100</wscn:ScalingWidth>
-            <wscn:ScalingHeight>100</wscn:ScalingHeight>
+            <wscn:ScalingWidth>{scan_ticket.scaling_width}</wscn:ScalingWidth>
+            <wscn:ScalingHeight>{scan_ticket.scaling_height}</wscn:ScalingHeight>
           </wscn:Scaling>
-          <wscn:Rotation>0</wscn:Rotation>
+          <wscn:Rotation>{scan_ticket.rotation}</wscn:Rotation>
           <wscn:MediaSides>
             <wscn:MediaFront>
               <wscn:ScanRegion>
-                <wscn:ScanRegionXOffset>0</wscn:ScanRegionXOffset>
-                <wscn:ScanRegionYOffset>0</wscn:ScanRegionYOffset>
-                <wscn:ScanRegionWidth>8500</wscn:ScanRegionWidth>
-                <wscn:ScanRegionHeight>11700</wscn:ScanRegionHeight>
+                <wscn:ScanRegionXOffset>{scan_ticket.region_x}</wscn:ScanRegionXOffset>
+                <wscn:ScanRegionYOffset>{scan_ticket.region_y}</wscn:ScanRegionYOffset>
+                <wscn:ScanRegionWidth>{scan_ticket.region_width}</wscn:ScanRegionWidth>
+                <wscn:ScanRegionHeight>{scan_ticket.region_height}</wscn:ScanRegionHeight>
               </wscn:ScanRegion>
-              <wscn:ColorProcessing>RGB24</wscn:ColorProcessing>
+              <wscn:ColorProcessing>{html.escape(scan_ticket.color_processing)}</wscn:ColorProcessing>
               <wscn:Resolution>
-                <wscn:Width>100</wscn:Width>
-                <wscn:Height>100</wscn:Height>
+                <wscn:Width>{scan_ticket.resolution}</wscn:Width>
+                <wscn:Height>{scan_ticket.resolution}</wscn:Height>
               </wscn:Resolution>
             </wscn:MediaFront>
             <wscn:MediaBack>
               <wscn:ScanRegion>
-                <wscn:ScanRegionXOffset>0</wscn:ScanRegionXOffset>
-                <wscn:ScanRegionYOffset>0</wscn:ScanRegionYOffset>
-                <wscn:ScanRegionWidth>8500</wscn:ScanRegionWidth>
-                <wscn:ScanRegionHeight>11700</wscn:ScanRegionHeight>
+                <wscn:ScanRegionXOffset>{scan_ticket.region_x}</wscn:ScanRegionXOffset>
+                <wscn:ScanRegionYOffset>{scan_ticket.region_y}</wscn:ScanRegionYOffset>
+                <wscn:ScanRegionWidth>{scan_ticket.region_width}</wscn:ScanRegionWidth>
+                <wscn:ScanRegionHeight>{scan_ticket.region_height}</wscn:ScanRegionHeight>
               </wscn:ScanRegion>
-              <wscn:ColorProcessing>RGB24</wscn:ColorProcessing>
+              <wscn:ColorProcessing>{html.escape(scan_ticket.color_processing)}</wscn:ColorProcessing>
               <wscn:Resolution>
-                <wscn:Width>100</wscn:Width>
-                <wscn:Height>100</wscn:Height>
+                <wscn:Width>{scan_ticket.resolution}</wscn:Width>
+                <wscn:Height>{scan_ticket.resolution}</wscn:Height>
               </wscn:Resolution>
             </wscn:MediaBack>
           </wscn:MediaSides>
@@ -954,6 +955,7 @@ class WsScanClientService:
                 destination_token=subscription.destination_token,
                 device_name=self.config.device_name,
                 from_endpoint=self.config.endpoint_uuid,
+                scan_ticket=self.config.scan_ticket,
                 input_source=event.input_source,
             ),
         )

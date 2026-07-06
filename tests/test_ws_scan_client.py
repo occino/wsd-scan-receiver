@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from wsd_scan_receiver.config import Config
+from tests.helpers import default_scan_ticket
+from wsd_scan_receiver.config import Config, ScanTicketConfig
 from wsd_scan_receiver.soap import SOAP12, WSD
 from wsd_scan_receiver.ws_scan_client import (
     DEVICE_PROBE_TYPES,
@@ -38,6 +39,7 @@ def _config(tmp_path: Path) -> Config:
         max_post_bytes=100 * 1024 * 1024,
         wsd_subscribe_enabled=True,
         wsd_subscribe_interval_seconds=60,
+        scan_ticket=default_scan_ticket(),
         uuid_file=tmp_path / "uuid",
     )
 
@@ -225,6 +227,7 @@ def test_create_scan_job_xml_contains_push_event_identifiers() -> None:
         destination_token="dest-token",
         device_name="Paperless",
         from_endpoint="urn:uuid:client",
+        scan_ticket=default_scan_ticket(),
         input_source="Platen",
     )
 
@@ -240,6 +243,60 @@ def test_create_scan_job_xml_contains_push_event_identifiers() -> None:
     assert b"<wscn:ScanRegionHeight>11700</wscn:ScanRegionHeight>" in payload
     assert b"<wscn:ColorProcessing>RGB24</wscn:ColorProcessing>" in payload
     assert b"<wscn:MediaBack>" in payload
+
+
+def test_create_scan_job_xml_uses_configured_scan_ticket() -> None:
+    ticket = ScanTicketConfig(
+        format="tiff-single-uncompressed",
+        input_source="Platen",
+        content_type="Photo",
+        color_processing="Grayscale8",
+        resolution=300,
+        compression_quality=75,
+        images_to_transfer=2,
+        width=2100,
+        height=2970,
+        region_x=10,
+        region_y=20,
+        region_width=2000,
+        region_height=2900,
+        brightness=1,
+        contrast=2,
+        sharpness=3,
+        rotation=90,
+        scaling_width=95,
+        scaling_height=96,
+    )
+
+    payload = create_scan_job_xml(
+        "http://192.0.2.21:80/WDP/SCAN",
+        scan_identifier="scan-id",
+        destination_token="dest-token",
+        device_name="Paperless",
+        from_endpoint="urn:uuid:client",
+        scan_ticket=ticket,
+    )
+
+    assert b"<wscn:Format>tiff-single-uncompressed</wscn:Format>" in payload
+    assert b"<wscn:CompressionQualityFactor>75</wscn:CompressionQualityFactor>" in payload
+    assert b"<wscn:ImagesToTransfer>2</wscn:ImagesToTransfer>" in payload
+    assert b"<wscn:InputSource>Platen</wscn:InputSource>" in payload
+    assert b"<wscn:ContentType>Photo</wscn:ContentType>" in payload
+    assert b"<wscn:Width>2100</wscn:Width>" in payload
+    assert b"<wscn:Height>2970</wscn:Height>" in payload
+    assert b"<wscn:ScanRegionXOffset>10</wscn:ScanRegionXOffset>" in payload
+    assert b"<wscn:ScanRegionYOffset>20</wscn:ScanRegionYOffset>" in payload
+    assert b"<wscn:ScanRegionWidth>2000</wscn:ScanRegionWidth>" in payload
+    assert b"<wscn:ScanRegionHeight>2900</wscn:ScanRegionHeight>" in payload
+    assert b"<wscn:ColorProcessing>Grayscale8</wscn:ColorProcessing>" in payload
+    assert b"<wscn:Width>300</wscn:Width>" in payload
+    assert b"<wscn:Height>300</wscn:Height>" in payload
+    assert b"<wscn:Brightness>1</wscn:Brightness>" in payload
+    assert b"<wscn:Contrast>2</wscn:Contrast>" in payload
+    assert b"<wscn:Sharpness>3</wscn:Sharpness>" in payload
+    assert b"<wscn:Rotation>90</wscn:Rotation>" in payload
+    assert b"<wscn:ScalingWidth>95</wscn:ScalingWidth>" in payload
+    assert b"<wscn:ScalingHeight>96</wscn:ScalingHeight>" in payload
 
 
 def test_parse_create_scan_job_info() -> None:

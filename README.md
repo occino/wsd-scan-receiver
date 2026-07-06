@@ -118,6 +118,35 @@ Compose-specific `.env` variables:
 | `PGID` | `1000` | Container group ID for file writes |
 | `WSD_DEBUG` | `false` | Compose-friendly alias passed to application `DEBUG` |
 
+### Scan Ticket Parameters
+
+These values are sent in the WS-Scan `CreateScanJob` request. The defaults are
+the Epson ET-2750 values that were observed to work. Other scanners may reject a
+job when a value is unsupported, so change one setting at a time and keep
+`WSD_DEBUG=true` while testing.
+
+| Variable | Default | Known/typical values | Description |
+| --- | --- | --- | --- |
+| `SCAN_FORMAT` | `exif` | `exif`, `tiff-single-uncompressed` | Requested output format. Epson ET-2750 returned JPEG/Exif for `exif`. |
+| `SCAN_INPUT_SOURCE` | `Auto` | `Auto`, `Platen` | Input source used when the scanner event does not provide one. |
+| `SCAN_CONTENT_TYPE` | `Text` | `Text`, `Photo`, `Mixed` | Scanner image optimization hint. |
+| `SCAN_COLOR_PROCESSING` | `RGB24` | `RGB24`, `Grayscale8`, `BlackAndWhite1` | Color mode. Epson ET-2750 testing confirmed `RGB24`. |
+| `SCAN_RESOLUTION` | `100` | `100`, `300` | Horizontal and vertical DPI. Epson ET-2750 reported `100` and `300`. |
+| `SCAN_COMPRESSION_QUALITY` | `50` | `1`-`100` | Compression quality hint for compressed formats such as `exif`. |
+| `SCAN_IMAGES_TO_TRANSFER` | `1` | usually `1` | Number of images requested for the job. Multi-page retrieval is still limited. |
+| `SCAN_WIDTH` | `8500` | scanner capability value | Input media width in WSD units. |
+| `SCAN_HEIGHT` | `11700` | scanner capability value | Input media height in WSD units. |
+| `SCAN_REGION_X` | `0` | scanner capability value | Scan region X offset. |
+| `SCAN_REGION_Y` | `0` | scanner capability value | Scan region Y offset. |
+| `SCAN_REGION_WIDTH` | `8500` | scanner capability value | Scan region width. |
+| `SCAN_REGION_HEIGHT` | `11700` | scanner capability value | Scan region height. |
+| `SCAN_BRIGHTNESS` | `0` | scanner-dependent signed integer | Brightness adjustment; `0` is neutral. |
+| `SCAN_CONTRAST` | `0` | scanner-dependent signed integer | Contrast adjustment; `0` is neutral. |
+| `SCAN_SHARPNESS` | `0` | scanner-dependent signed integer | Sharpness adjustment; `0` is neutral. |
+| `SCAN_ROTATION` | `0` | `0`, `90`, `180`, `270` | Rotation requested from the scanner. |
+| `SCAN_SCALING_WIDTH` | `100` | percent | Horizontal scaling. `100` means no scaling. |
+| `SCAN_SCALING_HEIGHT` | `100` | percent | Vertical scaling. `100` means no scaling. |
+
 ## Paperless-ngx
 
 Point `CONSUME_DIR` at a Paperless-ngx consume directory:
@@ -262,7 +291,7 @@ docker compose up --build -d --force-recreate --remove-orphans
 
 Good next extensions:
 
-- Configurable scan ticket profiles for resolution, color mode, and document size.
+- Named scan ticket profiles for switching between common scanner presets.
 - Multi-page job retrieval and richer status tracking.
 - Metrics endpoint for subscriptions, scan jobs, and failures.
 - Integration tests around recorded scanner SOAP fixtures.

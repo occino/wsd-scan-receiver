@@ -4,6 +4,7 @@ from io import BytesIO
 from pathlib import Path
 from threading import Thread
 
+from tests.helpers import default_scan_ticket
 from wsd_scan_receiver.config import Config
 from wsd_scan_receiver.receiver import make_handler, read_chunked_body
 from wsd_scan_receiver.soap import SOAP12, WSA, WST
@@ -24,6 +25,7 @@ def _config(tmp_path: Path, port: int = 0) -> Config:
         max_post_bytes=100 * 1024 * 1024,
         wsd_subscribe_enabled=False,
         wsd_subscribe_interval_seconds=60,
+        scan_ticket=default_scan_ticket(),
         uuid_file=tmp_path / "uuid",
     )
 
@@ -141,6 +143,7 @@ def test_http_post_rejects_large_payload(tmp_path: Path) -> None:
         max_post_bytes=4,
         wsd_subscribe_enabled=config.wsd_subscribe_enabled,
         wsd_subscribe_interval_seconds=config.wsd_subscribe_interval_seconds,
+        scan_ticket=config.scan_ticket,
         uuid_file=config.uuid_file,
     )
     server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(config))
