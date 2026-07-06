@@ -6,6 +6,7 @@ import logging
 import signal
 import time
 
+from .admin import AdminService
 from .config import Config
 from .discovery import DiscoveryService
 from .logging_config import configure_logging
@@ -40,9 +41,19 @@ def run() -> None:
         "WS-Scan push support is experimental and may require scanner-specific packet captures"
     )
 
+    scan_ticket_store = config.scan_ticket_store
+    service_settings_store = config.service_settings_store
+    post_processing_store = config.post_processing_store
+    if (
+        scan_ticket_store is None
+        or service_settings_store is None
+        or post_processing_store is None
+    ):
+        raise RuntimeError("Config.from_env must provide admin config stores")
     ws_scan_client = WsScanClientService(config)
     discovery = DiscoveryService(config, ws_scan_client.observe_discovery_payload)
     receiver = ReceiverService(config, ws_scan_client.handle_scan_available_event)
+    admin = AdminService(service_settings_store, post_processing_store, scan_ticket_store)
     stop = False
 
     def request_stop(signum: int, _frame: object) -> None:
@@ -54,6 +65,7 @@ def run() -> None:
     signal.signal(signal.SIGINT, request_stop)
 
     receiver.start()
+    admin.start()
     discovery.start()
     ws_scan_client.start()
     try:
@@ -62,6 +74,7 @@ def run() -> None:
     finally:
         ws_scan_client.stop()
         discovery.stop()
+        admin.stop()
         receiver.stop()
         LOGGER.info("WSD scan receiver stopped")
 

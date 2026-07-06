@@ -1,10 +1,13 @@
 from pathlib import Path
 
 from tests.helpers import default_scan_ticket
-from wsd_scan_receiver.config import Config, ScanTicketConfig
+from wsd_scan_receiver.config import Config, ScanTicketConfig, ScanTicketStore, ServiceSettingsStore
 from wsd_scan_receiver.soap import SOAP12, WSD
 from wsd_scan_receiver.ws_scan_client import (
     DEVICE_PROBE_TYPES,
+    ActiveSubscription,
+    ScanAvailableEvent,
+    WsScanClientService,
     create_scan_job_xml,
     parse_app_sequence_instance_id,
     parse_create_scan_job_info,
@@ -136,6 +139,35 @@ def test_subscribe_xml_contains_notify_to_and_destination(tmp_path: Path) -> Non
     assert b"http://schemas.microsoft.com/windows/2006/08/wdp/scan/ScanAvailableEvent" in payload
     assert b"<wscn:ClientDisplayName>Paperless</wscn:ClientDisplayName>" in payload
     assert b"<wscn:ClientContext>Scan</wscn:ClientContext>" in payload
+
+
+def test_subscribe_xml_uses_latest_service_settings(tmp_path: Path) -> None:
+    service_store = ServiceSettingsStore(tmp_path / "config.json")
+    service_store.update({"WSD_DEVICE_NAME": "Updated Scanner", "WSD_HOST": "192.0.2.99"})
+    config = _config(tmp_path)
+    config = Config(
+        device_name=config.device_name,
+        endpoint_uuid=config.endpoint_uuid,
+        http_port=config.http_port,
+        output_dir=config.output_dir,
+        debug=config.debug,
+        raw_dump_dir=config.raw_dump_dir,
+        log_level=config.log_level,
+        host_ip=config.host_ip,
+        interface=config.interface,
+        scanner_ip=config.scanner_ip,
+        max_post_bytes=config.max_post_bytes,
+        wsd_subscribe_enabled=config.wsd_subscribe_enabled,
+        wsd_subscribe_interval_seconds=config.wsd_subscribe_interval_seconds,
+        scan_ticket=config.scan_ticket,
+        uuid_file=config.uuid_file,
+        service_settings_store=service_store,
+    )
+
+    payload = subscribe_xml(config, "http://192.0.2.21:5357/scanner")
+
+    assert b"http://192.0.2.99:5357/events" in payload
+    assert b"<wscn:ClientDisplayName>Updated Scanner</wscn:ClientDisplayName>" in payload
 
 
 def test_parse_scanner_service_xaddrs_from_metadata() -> None:
@@ -297,6 +329,67 @@ def test_create_scan_job_xml_uses_configured_scan_ticket() -> None:
     assert b"<wscn:Rotation>90</wscn:Rotation>" in payload
     assert b"<wscn:ScalingWidth>95</wscn:ScalingWidth>" in payload
     assert b"<wscn:ScalingHeight>96</wscn:ScalingHeight>" in payload
+
+
+def test_push_scan_job_uses_latest_scan_ticket_store(tmp_path: Path) -> None:
+    store = ScanTicketStore(tmp_path / "config.json")
+    service_store = ServiceSettingsStore(tmp_path / "config.json")
+    config = _config(tmp_path)
+    config = Config(
+        device_name=config.device_name,
+        endpoint_uuid=config.endpoint_uuid,
+        http_port=config.http_port,
+        output_dir=config.output_dir,
+        debug=config.debug,
+        raw_dump_dir=config.raw_dump_dir,
+        log_level=config.log_level,
+        host_ip=config.host_ip,
+        interface=config.interface,
+        scanner_ip=config.scanner_ip,
+        max_post_bytes=config.max_post_bytes,
+        wsd_subscribe_enabled=config.wsd_subscribe_enabled,
+        wsd_subscribe_interval_seconds=config.wsd_subscribe_interval_seconds,
+        scan_ticket=config.scan_ticket,
+        uuid_file=config.uuid_file,
+        scan_ticket_store=store,
+        service_settings_store=service_store,
+    )
+    client = WsScanClientService(config)
+    client._subscriptions["urn:uuid:scanner"] = ActiveSubscription(
+        manager_url="http://192.0.2.21:80/WDP/SCAN",
+        identifier="urn:uuid:subscription",
+        expires_at=999999.0,
+        destination_token="dest-token",
+    )
+    store.update({"resolution": 300, "format": "tiff-single-uncompressed"})
+    service_store.update({"WSD_DEVICE_NAME": "Updated Scanner"})
+    create_requests: list[bytes] = []
+
+    def post_soap(_url: str, body: bytes) -> bytes:
+        create_requests.append(body)
+        return f"""<s:Envelope xmlns:s="{SOAP12}" xmlns:wscn="http://schemas.microsoft.com/windows/2006/08/wdp/scan">
+  <s:Body>
+    <wscn:CreateScanJobResponse>
+      <wscn:JobId>1</wscn:JobId>
+      <wscn:JobToken>job-token</wscn:JobToken>
+    </wscn:CreateScanJobResponse>
+  </s:Body>
+</s:Envelope>""".encode()
+
+    client._post_soap = post_soap  # type: ignore[method-assign]
+    client._post_soap_response = lambda _url, _body: (b"", "text/plain")  # type: ignore[method-assign]
+    client._store_scan_response = lambda _body, _content_type: None  # type: ignore[method-assign]
+
+    client._run_push_scan_job(ScanAvailableEvent(client_context="Scan", scan_identifier="scan-id"))
+
+    assert create_requests
+    assert b"<wscn:Format>tiff-single-uncompressed</wscn:Format>" in create_requests[0]
+    assert b"<wscn:Width>300</wscn:Width>" in create_requests[0]
+    assert b"<wscn:JobName>Updated Scanner WSD Scan</wscn:JobName>" in create_requests[0]
+    assert (
+        b"<wscn:JobOriginatingUserName>Updated Scanner</wscn:JobOriginatingUserName>"
+        in create_requests[0]
+    )
 
 
 def test_parse_create_scan_job_info() -> None:

@@ -10,7 +10,9 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "nico" }]
-dependencies = []
+dependencies = [
+  "Pillow>=10.0",
+]
 
 [project.scripts]
 wsd-scan-receiver = "wsd_scan_receiver.main:main"
@@ -23,6 +25,7 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/wsd_scan_receiver"]
+artifacts = ["src/wsd_scan_receiver/scan_defaults.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

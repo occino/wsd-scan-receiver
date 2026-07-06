@@ -18,7 +18,8 @@ from socketserver import TCPServer
 from typing import Any
 from xml.etree.ElementTree import ParseError
 
-from .config import Config
+from .config import Config, PostProcessingSettings, ServiceSettings
+from .post_processing import store_scan_payload
 from .soap import device_metadata_xml, parse_soap_envelope, route_soap_request, soap_envelope
 
 LOGGER = logging.getLogger(__name__)
@@ -87,6 +88,33 @@ def write_payload(directory: Path, prefix: str, suffix: str, payload: bytes) -> 
         tmp_path = Path(handle.name)
     tmp_path.replace(path)
     return path
+
+
+def post_processing_settings(config: Config) -> PostProcessingSettings:
+    if config.post_processing_store is None:
+        return PostProcessingSettings()
+    return config.post_processing_store.get()
+
+
+def service_settings(config: Config) -> ServiceSettings:
+    if config.service_settings_store is not None:
+        return config.service_settings_store.get()
+    return ServiceSettings(
+        wsd_device_name=config.device_name,
+        wsd_host=config.host_ip,
+        wsd_interface=config.interface or "",
+        wsd_scanner_ip=config.scanner_ip or "",
+        debug=config.debug,
+        log_level=config.log_level,
+    )
+
+
+def is_debug_enabled(config: Config) -> bool:
+    return service_settings(config).debug
+
+
+def advertised_host_ip(config: Config) -> str:
+    return service_settings(config).wsd_host or config.host_ip
 
 
 def read_chunked_body(stream: BufferedIOBase, *, max_bytes: int | None = None) -> bytes:
@@ -168,7 +196,7 @@ class WsdRequestHandler(BaseHTTPRequestHandler):
             self._send(HTTPStatus.BAD_REQUEST, b"invalid HTTP request body\n", "text/plain")
             return
 
-        if self.config.debug:
+        if is_debug_enabled(self.config):
             dump_path = write_payload(
                 self.config.raw_dump_dir,
                 "http-post",
@@ -192,7 +220,13 @@ class WsdRequestHandler(BaseHTTPRequestHandler):
             return
 
         suffix = guess_extension(content_type, payload)
-        out_path = write_payload(self.config.output_dir, "scan", suffix, payload)
+        out_path = store_scan_payload(
+            self.config.output_dir,
+            "scan",
+            suffix,
+            payload,
+            post_processing_settings=post_processing_settings(self.config),
+        )
         LOGGER.info(
             "stored scan payload",
             extra={"path": str(out_path), "content_type": content_type, "bytes": len(payload)},
@@ -204,7 +238,7 @@ class WsdRequestHandler(BaseHTTPRequestHandler):
             request = parse_soap_envelope(payload)
         except ParseError:
             LOGGER.warning("invalid SOAP/XML request")
-            if self.config.debug:
+            if is_debug_enabled(self.config):
                 path = write_payload(self.config.raw_dump_dir, "invalid-soap", ".xml", payload)
                 LOGGER.debug("stored invalid SOAP", extra={"path": str(path)})
             self._send(HTTPStatus.BAD_REQUEST, b"invalid SOAP/XML\n", "text/plain; charset=utf-8")

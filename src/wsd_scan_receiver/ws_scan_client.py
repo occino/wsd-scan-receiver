@@ -28,7 +28,15 @@ from .discovery import (
     MULTICAST_GROUP,
     MULTICAST_GROUP_V6,
 )
-from .receiver import guess_extension, write_payload
+from .post_processing import store_scan_payload
+from .receiver import (
+    advertised_host_ip,
+    guess_extension,
+    is_debug_enabled,
+    post_processing_settings,
+    service_settings,
+    write_payload,
+)
 from .soap import SOAP12, WSA_2004, WSCN, WSD
 
 LOGGER = logging.getLogger(__name__)
@@ -306,7 +314,8 @@ def unsubscribe_xml(manager_url: str, identifier: str) -> bytes:
 def subscribe_xml(config: Config, target_url: str) -> bytes:
     """Build a conservative WS-Eventing Subscribe request for scan events."""
     message_id = f"urn:uuid:{uuid.uuid4()}"
-    notify_to = f"http://{config.host_ip}:{config.http_port}/events"
+    notify_to = f"http://{advertised_host_ip(config)}:{config.http_port}/events"
+    device_name = service_settings(config).wsd_device_name
     xml = f"""<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope
     xmlns:s="{SOAP12}"
@@ -332,7 +341,7 @@ def subscribe_xml(config: Config, target_url: str) -> bytes:
       <wse:Filter Dialect="{DPWS_ACTION_FILTER}">{WSCN}/ScanAvailableEvent</wse:Filter>
       <wscn:ScanDestinations>
         <wscn:ScanDestination>
-          <wscn:ClientDisplayName>{html.escape(config.device_name)}</wscn:ClientDisplayName>
+          <wscn:ClientDisplayName>{html.escape(device_name)}</wscn:ClientDisplayName>
           <wscn:ClientContext>{SCAN_CLIENT_CONTEXT}</wscn:ClientContext>
         </wscn:ScanDestination>
       </wscn:ScanDestinations>
@@ -668,10 +677,11 @@ class WsScanClientService:
             sock.close()
 
     def _probe_ipv6(self, payload: bytes) -> None:
-        if not self.config.interface:
+        interface = service_settings(self.config).wsd_interface
+        if not interface:
             return
         try:
-            if_index = socket.if_nametoindex(self.config.interface)
+            if_index = socket.if_nametoindex(interface)
         except OSError:
             return
 
@@ -730,10 +740,11 @@ class WsScanClientService:
             )
 
     def _probe_configured_scanner_http(self) -> None:
-        if not self.config.scanner_ip:
+        scanner_ip = service_settings(self.config).wsd_scanner_ip
+        if not scanner_ip:
             return
 
-        discovery_url = f"http://{self.config.scanner_ip}:80{STABLE_DISCOVERY_PATH}"
+        discovery_url = f"http://{scanner_ip}:80{STABLE_DISCOVERY_PATH}"
         LOGGER.info(
             "probing configured WSD stable discovery endpoint",
             extra={"url": discovery_url},
@@ -953,9 +964,13 @@ class WsScanClientService:
                 subscription.manager_url,
                 scan_identifier=event.scan_identifier,
                 destination_token=subscription.destination_token,
-                device_name=self.config.device_name,
+                device_name=service_settings(self.config).wsd_device_name,
                 from_endpoint=self.config.endpoint_uuid,
-                scan_ticket=self.config.scan_ticket,
+                scan_ticket=(
+                    self.config.scan_ticket_store.get()
+                    if self.config.scan_ticket_store is not None
+                    else self.config.scan_ticket
+                ),
                 input_source=event.input_source,
             ),
         )
@@ -996,7 +1011,7 @@ class WsScanClientService:
         return None
 
     def _store_scan_response(self, body: bytes, content_type: str) -> None:
-        if self.config.debug:
+        if is_debug_enabled(self.config):
             dump = write_payload(
                 self.config.raw_dump_dir,
                 "retrieve-image-response",
@@ -1014,7 +1029,13 @@ class WsScanClientService:
 
         suffix = guess_extension(content_type, body)
         if suffix in {".pdf", ".jpg", ".png", ".tif"}:
-            out_path = write_payload(self.config.output_dir, "scan", suffix, body)
+            out_path = store_scan_payload(
+                self.config.output_dir,
+                "scan",
+                suffix,
+                body,
+                post_processing_settings=post_processing_settings(self.config),
+            )
             LOGGER.info(
                 "stored retrieved scan payload",
                 extra={"path": str(out_path), "content_type": content_type, "bytes": len(body)},
@@ -1038,7 +1059,13 @@ class WsScanClientService:
             suffix = guess_extension(part_content_type, payload)
             if suffix not in {".pdf", ".jpg", ".png", ".tif"}:
                 continue
-            out_path = write_payload(self.config.output_dir, "scan", suffix, payload)
+            out_path = store_scan_payload(
+                self.config.output_dir,
+                "scan",
+                suffix,
+                payload,
+                post_processing_settings=post_processing_settings(self.config),
+            )
             stored += 1
             LOGGER.info(
                 "stored multipart scan payload",
@@ -1156,7 +1183,7 @@ class WsScanClientService:
             },
             method="POST",
         )
-        if self.config.debug:
+        if is_debug_enabled(self.config):
             action = self._soap_action_from_body(body)
             dump = write_payload(
                 self.config.raw_dump_dir,
@@ -1195,7 +1222,7 @@ class WsScanClientService:
                     "body": error_body.decode("utf-8", "replace"),
                 },
             )
-            if self.config.debug:
+            if is_debug_enabled(self.config):
                 dump = write_payload(
                     self.config.raw_dump_dir,
                     "soap-error-response",

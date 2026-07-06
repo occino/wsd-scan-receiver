@@ -24,6 +24,7 @@ RUN pip install --no-cache-dir .
 USER wsd
 
 EXPOSE 5357/tcp
+EXPOSE 8888/tcp
 EXPOSE 3702/udp
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

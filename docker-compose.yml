@@ -27,25 +27,6 @@ services:
       # discovery is unreliable. This still uses WSD/DPWS only.
       WSD_SCANNER_IP: "${WSD_SCANNER_IP:-}"
       MAX_POST_BYTES: "${MAX_POST_BYTES:-104857600}"
-      SCAN_FORMAT: "${SCAN_FORMAT:-exif}"
-      SCAN_INPUT_SOURCE: "${SCAN_INPUT_SOURCE:-Auto}"
-      SCAN_CONTENT_TYPE: "${SCAN_CONTENT_TYPE:-Text}"
-      SCAN_COLOR_PROCESSING: "${SCAN_COLOR_PROCESSING:-RGB24}"
-      SCAN_RESOLUTION: "${SCAN_RESOLUTION:-100}"
-      SCAN_COMPRESSION_QUALITY: "${SCAN_COMPRESSION_QUALITY:-50}"
-      SCAN_IMAGES_TO_TRANSFER: "${SCAN_IMAGES_TO_TRANSFER:-1}"
-      SCAN_WIDTH: "${SCAN_WIDTH:-8500}"
-      SCAN_HEIGHT: "${SCAN_HEIGHT:-11700}"
-      SCAN_REGION_X: "${SCAN_REGION_X:-0}"
-      SCAN_REGION_Y: "${SCAN_REGION_Y:-0}"
-      SCAN_REGION_WIDTH: "${SCAN_REGION_WIDTH:-8500}"
-      SCAN_REGION_HEIGHT: "${SCAN_REGION_HEIGHT:-11700}"
-      SCAN_BRIGHTNESS: "${SCAN_BRIGHTNESS:-0}"
-      SCAN_CONTRAST: "${SCAN_CONTRAST:-0}"
-      SCAN_SHARPNESS: "${SCAN_SHARPNESS:-0}"
-      SCAN_ROTATION: "${SCAN_ROTATION:-0}"
-      SCAN_SCALING_WIDTH: "${SCAN_SCALING_WIDTH:-100}"
-      SCAN_SCALING_HEIGHT: "${SCAN_SCALING_HEIGHT:-100}"
       DEBUG: "${WSD_DEBUG:-false}"
       RAW_DUMP_DIR: "/debug-dumps"
       LOG_LEVEL: "${LOG_LEVEL:-INFO}"
@@ -54,7 +35,7 @@ services:
       # Host directory where received scan files are written.
       - ${SCAN_DIR:-./scans}:/scans
       - ${DEBUG_DUMPS_DIR:-./debug-dumps}:/debug-dumps
-      # Persists the generated endpoint UUID across container restarts.
+      # Persists the generated endpoint UUID, subscription state, and scan config.
       - ${DATA_DIR:-./data}:/data
 
     restart: unless-stopped

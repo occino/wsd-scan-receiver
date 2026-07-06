@@ -18,6 +18,8 @@ Implemented:
 - WS-Discovery listener on UDP `3702`
 - WS-Discovery `Hello`, `Probe`, and `Resolve` handling
 - HTTP SOAP/DPWS endpoint on TCP `5357`
+- Web UI for scan ticket settings on TCP `8888`
+- Optional document cropping with automatic, fixed DIN-A4, and disabled modes
 - DPWS metadata responses for WS-Transfer and WS-MetadataExchange
 - Active WS-Eventing subscription to scanner `ScanAvailableEvent` notifications
 - WS-Scan push flow: `ScanAvailableEvent` -> `CreateScanJob` -> `RetrieveImage`
@@ -69,6 +71,12 @@ docker compose logs -f
 curl http://127.0.0.1:5357/healthz
 ```
 
+Open the scan settings page:
+
+```bash
+xdg-open http://127.0.0.1:8888/
+```
+
 ## Docker Networking
 
 The compose file uses `network_mode: host` intentionally. WS-Discovery relies on
@@ -80,6 +88,7 @@ Required traffic:
 
 - UDP `3702` inbound and outbound for WS-Discovery
 - TCP `5357` inbound from the scanner for SOAP/DPWS callbacks
+- TCP `8888` inbound from trusted LAN clients for the settings page
 - HTTP from the receiver to the scanner for WS-Eventing and WS-Scan requests
 
 ## Configuration
@@ -118,34 +127,46 @@ Compose-specific `.env` variables:
 | `PGID` | `1000` | Container group ID for file writes |
 | `WSD_DEBUG` | `false` | Compose-friendly alias passed to application `DEBUG` |
 
+### Document Cropping
+
+Document cropping is configured in the web UI under `Document Cropping`.
+Supported image files can be automatically cropped with Python/Pillow before the
+final file is moved into `OUTPUT_DIR`. Unsupported payloads, such as PDFs, are
+stored unchanged.
+
+The crop behavior assumes the document is aligned with the top-left scanner bed
+corner. In `none` mode no cropping is applied. In `auto` mode it detects the
+free side and bottom edges, then keeps the fixed top-left corner anchored. In
+`DIN-A4` mode it crops a fixed top-left A4 rectangle and ignores the auto tuning
+parameters below. The behavior can be tuned in the same section:
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `Crop mode` | `auto` | `none` skips cropping, `auto` uses automatic document detection, `DIN-A4` crops a fixed A4 rectangle |
+| `Background threshold` | `220` | Corner brightness at or above this value disables auto-cropping |
+| `Document contrast` | `35` | Brightness difference from the detected background needed to identify the document |
+| `Minimum document width (%)` | `50` | Ignore detected crop boxes narrower than this share of the image |
+| `Minimum document height (%)` | `50` | Ignore detected crop boxes shorter than this share of the image |
+| `Side crop padding (px)` | `0` | Pixels added back on the detected free side; for top-left alignment this is the right edge |
+| `Bottom crop padding (px)` | `0` | Pixels added back below the detected document |
+
 ### Scan Ticket Parameters
 
-These values are sent in the WS-Scan `CreateScanJob` request. The defaults are
-the Epson ET-2750 values that were observed to work. Other scanners may reject a
+These values are sent in the WS-Scan `CreateScanJob` request. They are no
+longer configured with `.env` or `SCAN_*` variables. Open
+`http://127.0.0.1:8888/` and save the form to write `/data/config.json`.
+Changes apply to the next scan job without restarting the service.
+
+Defaults are shipped in `src/wsd_scan_receiver/scan_defaults.json`. The current
+defaults are Epson ET-2750 values observed to work. Other scanners may reject a
 job when a value is unsupported, so change one setting at a time and keep
 `WSD_DEBUG=true` while testing.
 
-| Variable | Default | Known/typical values | Description |
-| --- | --- | --- | --- |
-| `SCAN_FORMAT` | `exif` | `exif`, `tiff-single-uncompressed` | Requested output format. Epson ET-2750 returned JPEG/Exif for `exif`. |
-| `SCAN_INPUT_SOURCE` | `Auto` | `Auto`, `Platen` | Input source used when the scanner event does not provide one. |
-| `SCAN_CONTENT_TYPE` | `Text` | `Text`, `Photo`, `Mixed` | Scanner image optimization hint. |
-| `SCAN_COLOR_PROCESSING` | `RGB24` | `RGB24`, `Grayscale8`, `BlackAndWhite1` | Color mode. Epson ET-2750 testing confirmed `RGB24`. |
-| `SCAN_RESOLUTION` | `100` | `100`, `300` | Horizontal and vertical DPI. Epson ET-2750 reported `100` and `300`. |
-| `SCAN_COMPRESSION_QUALITY` | `50` | `1`-`100` | Compression quality hint for compressed formats such as `exif`. |
-| `SCAN_IMAGES_TO_TRANSFER` | `1` | usually `1` | Number of images requested for the job. Multi-page retrieval is still limited. |
-| `SCAN_WIDTH` | `8500` | scanner capability value | Input media width in WSD units. |
-| `SCAN_HEIGHT` | `11700` | scanner capability value | Input media height in WSD units. |
-| `SCAN_REGION_X` | `0` | scanner capability value | Scan region X offset. |
-| `SCAN_REGION_Y` | `0` | scanner capability value | Scan region Y offset. |
-| `SCAN_REGION_WIDTH` | `8500` | scanner capability value | Scan region width. |
-| `SCAN_REGION_HEIGHT` | `11700` | scanner capability value | Scan region height. |
-| `SCAN_BRIGHTNESS` | `0` | scanner-dependent signed integer | Brightness adjustment; `0` is neutral. |
-| `SCAN_CONTRAST` | `0` | scanner-dependent signed integer | Contrast adjustment; `0` is neutral. |
-| `SCAN_SHARPNESS` | `0` | scanner-dependent signed integer | Sharpness adjustment; `0` is neutral. |
-| `SCAN_ROTATION` | `0` | `0`, `90`, `180`, `270` | Rotation requested from the scanner. |
-| `SCAN_SCALING_WIDTH` | `100` | percent | Horizontal scaling. `100` means no scaling. |
-| `SCAN_SCALING_HEIGHT` | `100` | percent | Vertical scaling. `100` means no scaling. |
+The same data is available as JSON:
+
+```bash
+curl http://127.0.0.1:8888/api/scan-config
+```
 
 ## Paperless-ngx
 
