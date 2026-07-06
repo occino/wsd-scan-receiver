@@ -170,6 +170,30 @@ def test_http_post_rejects_large_payload(tmp_path: Path) -> None:
     assert response.status == 413
 
 
+def test_http_post_rejects_negative_content_length(tmp_path: Path) -> None:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(_config(tmp_path)))
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+
+    try:
+        conn = HTTPConnection("127.0.0.1", port, timeout=5)
+        conn.putrequest("POST", "/scanner")
+        conn.putheader("Host", f"127.0.0.1:{port}")
+        conn.putheader("Content-Type", "application/octet-stream")
+        conn.putheader("Content-Length", "-1")
+        conn.endheaders()
+        response = conn.getresponse()
+        body = response.read()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert response.status == 400
+    assert body == b"invalid HTTP request body\n"
+
+
 def test_http_post_chunked_scan_available_event(tmp_path: Path) -> None:
     seen_events: list[bytes] = []
     server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(_config(tmp_path)))

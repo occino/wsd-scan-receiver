@@ -4,7 +4,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
 
-from wsd_scan_receiver.admin import make_admin_handler
+from wsd_scan_receiver.admin import MAX_ADMIN_POST_BYTES, make_admin_handler
 from wsd_scan_receiver.config import (
     PostProcessingSettingsStore,
     ScanTicketStore,
@@ -108,6 +108,59 @@ def test_admin_post_invalid_value_keeps_current_config(tmp_path: Path) -> None:
     assert response.status == 400
     assert "resolution" in json.loads(body)["error"]
     assert scan_store.get() == before
+    assert not config_file.exists()
+
+
+def test_admin_post_rejects_oversized_body(tmp_path: Path) -> None:
+    config_file = tmp_path / "config.json"
+    service_store = ServiceSettingsStore(config_file)
+    post_processing_store = PostProcessingSettingsStore(config_file)
+    scan_store = ScanTicketStore(config_file)
+    server, thread, port = _server(service_store, post_processing_store, scan_store)
+
+    try:
+        conn = HTTPConnection("127.0.0.1", port, timeout=5)
+        conn.putrequest("POST", "/api/config")
+        conn.putheader("Host", f"127.0.0.1:{port}")
+        conn.putheader("Content-Type", "application/json")
+        conn.putheader("Content-Length", str(MAX_ADMIN_POST_BYTES + 1))
+        conn.endheaders()
+        response = conn.getresponse()
+        body = response.read()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert response.status == 400
+    assert b"request body must not exceed" in body
+    assert not config_file.exists()
+
+
+def test_admin_post_rejects_invalid_utf8_json(tmp_path: Path) -> None:
+    config_file = tmp_path / "config.json"
+    service_store = ServiceSettingsStore(config_file)
+    post_processing_store = PostProcessingSettingsStore(config_file)
+    scan_store = ScanTicketStore(config_file)
+    server, thread, port = _server(service_store, post_processing_store, scan_store)
+
+    try:
+        conn = HTTPConnection("127.0.0.1", port, timeout=5)
+        conn.request(
+            "POST",
+            "/api/config",
+            body=b"\xff",
+            headers={"Content-Type": "application/json"},
+        )
+        response = conn.getresponse()
+        body = response.read()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert response.status == 400
+    assert b"request body must contain a JSON object" in body
     assert not config_file.exists()
 
 

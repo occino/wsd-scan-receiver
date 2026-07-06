@@ -187,6 +187,17 @@ class WsdRequestHandler(BaseHTTPRequestHandler):
                 payload = read_chunked_body(self.rfile, max_bytes=self.config.max_post_bytes)
             else:
                 content_length = int(self.headers.get("Content-Length", "0"))
+                if content_length < 0:
+                    LOGGER.warning(
+                        "HTTP POST body has negative Content-Length",
+                        extra={"content_length": content_length},
+                    )
+                    self._send(
+                        HTTPStatus.BAD_REQUEST,
+                        b"invalid HTTP request body\n",
+                        "text/plain; charset=utf-8",
+                    )
+                    return
                 if content_length > self.config.max_post_bytes:
                     LOGGER.warning(
                         "HTTP POST body too large",

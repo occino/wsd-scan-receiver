@@ -54,10 +54,19 @@ Set at least:
 ```dotenv
 SCAN_DIR=/path/to/scan-output
 WSD_DEVICE_NAME=Paperless
-WSD_INTERFACE=ens16
+```
+
+On many scanners, active subscription is also needed before the receiver appears
+as a destination. Enable it when required by your device, and set the scanner IP
+if multicast discovery is unreliable:
+
+```dotenv
 WSD_SUBSCRIBE_ENABLED=true
 WSD_SCANNER_IP=192.168.0.21
 ```
+
+Set `WSD_INTERFACE`, for example `ens16`, only when you need IPv6
+WS-Discovery on a specific LAN interface.
 
 Start the service:
 
@@ -76,7 +85,8 @@ curl http://127.0.0.1:5357/healthz
 ## Settings Web GUI
 
 The settings web UI listens on `WSD_ADMIN_PORT`, which defaults to `8888`.
-Open it from a trusted LAN browser:
+It has no built-in authentication and should only be reachable from trusted LAN
+clients. Open it from a trusted LAN browser:
 
 ```bash
 xdg-open "http://127.0.0.1:${WSD_ADMIN_PORT:-8888}/"

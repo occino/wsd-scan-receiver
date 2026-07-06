@@ -43,6 +43,7 @@ from .receiver import ThreadingHTTPServerNoFqdn, ThreadingHTTPServerV6
 LOGGER = logging.getLogger(__name__)
 
 ADMIN_PORT = 8888
+MAX_ADMIN_POST_BYTES = 1024 * 1024
 
 
 SCAN_FIELD_LABELS = {
@@ -899,19 +900,29 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
         return service_values, post_processing_values, scan_values, ui_values
 
     def _read_values(self) -> dict[str, Any]:
-        content_length = int(self.headers.get("Content-Length", "0"))
+        try:
+            content_length = int(self.headers.get("Content-Length", "0"))
+        except ValueError as exc:
+            raise ValueError("Content-Length must be an integer") from exc
+        if content_length < 0:
+            raise ValueError("Content-Length must not be negative")
+        if content_length > MAX_ADMIN_POST_BYTES:
+            raise ValueError(f"request body must not exceed {MAX_ADMIN_POST_BYTES} bytes")
         payload = self.rfile.read(content_length)
         content_type = self.headers.get("Content-Type", "").lower()
         if content_type.startswith("application/json"):
             try:
                 values = json.loads(payload.decode("utf-8"))
-            except json.JSONDecodeError as exc:
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
                 raise ValueError("request body must contain a JSON object") from exc
             if not isinstance(values, dict):
                 raise ValueError("request body must contain a JSON object")
             return values
 
-        parsed = parse_qs(payload.decode("utf-8"), keep_blank_values=True)
+        try:
+            parsed = parse_qs(payload.decode("utf-8"), keep_blank_values=True)
+        except UnicodeDecodeError as exc:
+            raise ValueError("request body must be valid UTF-8") from exc
         return {name: values[-1] for name, values in parsed.items()}
 
     def _send_json(self, status: HTTPStatus, data: object) -> None:
