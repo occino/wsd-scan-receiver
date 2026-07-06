@@ -3,9 +3,10 @@
 Self-hosted WSD/WS-Scan push receiver for network scanners.
 
 The service appears on the LAN as a "Scan to Computer (WSD)" destination and
-saves received scans into a configurable output directory. It is designed to run
-in Docker with host networking and can write directly to another application's
-scan import directory.
+saves received scans into a configurable output directory, commonly a
+Paperless-ngx consume directory. It is designed to run in Docker with host
+networking and can write directly to another application's scan import
+directory.
 
 ## Status
 
