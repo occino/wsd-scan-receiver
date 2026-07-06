@@ -1,12 +1,8 @@
 # WSD Scan Receiver
 
-Self-hosted WSD/WS-Scan push receiver for network scanners.
+WSD Scan Receiver is a self-hosted WSD/WS-Scan service for receiving scans from network-connected flatbed scanners such as the Epson ET-2750.
 
-The service appears on the LAN as a "Scan to Computer (WSD)" destination and
-saves received scans into a configurable output directory, commonly a
-Paperless-ngx consume directory. It is designed to run in Docker with host
-networking and can write directly to another application's scan import
-directory.
+Once the service is running on your local network, supported scanners can use it as a scan destination via the "Scan to Computer (WSD)" menu. If the output directory is configured as a Paperless-ngx consume directory, new scans are imported directly into Paperless-ngx.
 
 ## Status
 
