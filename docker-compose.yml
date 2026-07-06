@@ -1,0 +1,52 @@
+services:
+  wsd-scan-receiver:
+    build: .
+    container_name: wsd-scan-receiver
+    hostname: "${WSD_HOSTNAME:-paperless-wsd}"
+    user: "${PUID:-1000}:${PGID:-1000}"
+
+    # WS-Discovery uses UDP multicast on 239.255.255.250:3702. Host networking
+    # gives scanners on the LAN the best chance of seeing this receiver.
+    network_mode: host
+
+    environment:
+      WSD_DEVICE_NAME: "${WSD_DEVICE_NAME:-Paperless WSD Scanner}"
+      WSD_UUID: "${WSD_UUID:-}"
+      OUTPUT_DIR: "/consume"
+      # Optional: set this if automatic XAddr host IP detection picks the wrong
+      # interface on a multi-homed host.
+      WSD_HOST: "${WSD_HOST:-}"
+      # Optional: set this to the LAN interface used for IPv6 WS-Discovery.
+      WSD_INTERFACE: "${WSD_INTERFACE:-}"
+      # Experimental: actively probe WSD scan devices and subscribe for
+      # ScanAvailableEvent notifications.
+      WSD_SUBSCRIBE_ENABLED: "${WSD_SUBSCRIBE_ENABLED:-false}"
+      WSD_SUBSCRIBE_INTERVAL_SECONDS: "${WSD_SUBSCRIBE_INTERVAL_SECONDS:-60}"
+      # Optional: Epson printer IP for active Epson UDP 3289 discovery polling.
+      EPSON_PRINTER_IP: "${EPSON_PRINTER_IP:-}"
+      # Optional: enable EpsonScan2 native push-scan ready bridge. Requires
+      # libes2command.so to be mounted and EPSONSCAN2_LIB_DIR or
+      # EPSONSCAN2_LIB_PATH to be set.
+      EPSONSCAN2_ENABLED: "${EPSONSCAN2_ENABLED:-false}"
+      EPSONSCAN2_LIB_DIR: "${EPSONSCAN2_LIB_DIR:-}"
+      EPSONSCAN2_LIB_PATH: "${EPSONSCAN2_LIB_PATH:-}"
+      EPSONSCAN2_KEEPALIVE: "${EPSONSCAN2_KEEPALIVE:-true}"
+      EPSONSCAN2_REFRESH_SECONDS: "${EPSONSCAN2_REFRESH_SECONDS:-0}"
+      # Optional low-level Epson protocol debugging. Leave disabled for normal
+      # WSD use because it opens Epson-specific ports and polls the printer.
+      EPSON_DEBUG_ENABLED: "${EPSON_DEBUG_ENABLED:-false}"
+      DEBUG: "${WSD_DEBUG:-false}"
+      RAW_DUMP_DIR: "/debug-dumps"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+
+    volumes:
+      # Point this at your Paperless-ngx consume directory if desired.
+      - ${CONSUME_DIR:-./consume}:/consume
+      - ${DEBUG_DUMPS_DIR:-./debug-dumps}:/debug-dumps
+      # Persists the generated endpoint UUID across container restarts.
+      - ${DATA_DIR:-./data}:/data
+      # Optional: mount the EpsonScan2 library directory containing
+      # libes2command.so, then set EPSONSCAN2_LIB_DIR=/epsonscan2-lib.
+      - ${EPSONSCAN2_LIB_HOST_DIR:-./epsonscan2-lib}:/epsonscan2-lib:ro
+
+    restart: unless-stopped
