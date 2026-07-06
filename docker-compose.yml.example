@@ -13,6 +13,7 @@ services:
       WSD_DEVICE_NAME: "${WSD_DEVICE_NAME:-Paperless}"
       WSD_UUID: "${WSD_UUID:-}"
       WSD_HTTP_PORT: "${WSD_HTTP_PORT:-5357}"
+      WSD_ADMIN_PORT: "${WSD_ADMIN_PORT:-8888}"
       OUTPUT_DIR: "/scans"
       ORIGINAL_DIR: "/original"
       # Optional: set this if automatic XAddr host IP detection picks the wrong
@@ -42,13 +43,3 @@ services:
       - ${DATA_DIR:-./data}:/data
 
     restart: unless-stopped
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.wsd-scan-receiver-router.rule=Host(`wsd-scan-receiver.homelab.lan`)
-      - traefik.http.routers.wsd-scan-receiver-router.tls=true
-      - traefik.http.routers.wsd-scan-receiver-router.entrypoints=websecure
-      - traefik.http.routers.wsd-scan-receiver-router.tls.certresolver=myresolver
-      - traefik.http.routers.wsd-scan-receiver-router.service=wsd-scan-receiver-srv
-      - traefik.http.services.wsd-scan-receiver-srv.loadbalancer.server.port=8888
-      - traefik.http.services.wsd-scan-receiver-srv.loadbalancer.server.scheme=http
-      - com.centurylinklabs.watchtower.enable=true

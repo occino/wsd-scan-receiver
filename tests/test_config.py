@@ -87,6 +87,7 @@ def test_config_from_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
     monkeypatch.setattr(config_module, "SCAN_CONFIG_FILE", tmp_path / "config.json")
     monkeypatch.setenv("WSD_DEVICE_NAME", "Office Scanner")
     monkeypatch.setenv("WSD_HTTP_PORT", "9999")
+    monkeypatch.setenv("WSD_ADMIN_PORT", "8899")
     monkeypatch.setenv("OUTPUT_DIR", str(tmp_path / "scans"))
     monkeypatch.setenv("ORIGINAL_DIR", str(tmp_path / "original"))
     monkeypatch.setenv("RAW_DUMP_DIR", str(tmp_path / "dumps"))
@@ -100,6 +101,7 @@ def test_config_from_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
 
     assert config.device_name == "Office Scanner"
     assert config.http_port == 9999
+    assert config.admin_port == 8899
     assert config.debug is True
     assert config.host_ip == "192.0.2.10"
     assert config.metadata_url == "http://192.0.2.10:9999/metadata"
@@ -535,4 +537,16 @@ def test_config_rejects_invalid_port(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     monkeypatch.setenv("WSD_HTTP_PORT", "99999")
 
     with pytest.raises(ValueError, match="WSD_HTTP_PORT"):
+        Config.from_env()
+
+
+def test_config_rejects_invalid_admin_port(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("WSD_HOST", "192.0.2.10")
+    monkeypatch.setenv("WSD_UUID_FILE", str(tmp_path / "uuid"))
+    monkeypatch.setattr(config_module, "SCAN_CONFIG_FILE", tmp_path / "config.json")
+    monkeypatch.setenv("WSD_ADMIN_PORT", "99999")
+
+    with pytest.raises(ValueError, match="WSD_ADMIN_PORT"):
         Config.from_env()

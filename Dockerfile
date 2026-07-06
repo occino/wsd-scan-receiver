@@ -5,7 +5,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     OUTPUT_DIR=/scans \
     ORIGINAL_DIR=/original \
     RAW_DUMP_DIR=/debug-dumps \
-    WSD_HTTP_PORT=5357
+    WSD_HTTP_PORT=5357 \
+    WSD_ADMIN_PORT=8888
 
 WORKDIR /app
 

@@ -29,6 +29,7 @@ def run() -> None:
             "device_name": config.device_name,
             "endpoint_uuid": config.endpoint_uuid,
             "http_port": config.http_port,
+            "admin_port": config.admin_port,
             "output_dir": str(config.output_dir),
             "debug": config.debug,
             "raw_dump_dir": str(config.raw_dump_dir),
@@ -60,6 +61,7 @@ def run() -> None:
         post_processing_store,
         scan_ticket_store,
         ui_settings_store,
+        port=config.admin_port,
     )
     stop = False
 

@@ -18,7 +18,7 @@ Implemented:
 - WS-Discovery listener on UDP `3702`
 - WS-Discovery `Hello`, `Probe`, and `Resolve` handling
 - HTTP SOAP/DPWS endpoint on TCP `5357`
-- Web UI for scan ticket settings on TCP `8888`
+- Web UI for scan ticket settings on TCP `8888` by default
 - Optional document cropping with automatic, fixed DIN-A4, and disabled modes
 - DPWS metadata responses for WS-Transfer and WS-MetadataExchange
 - Active WS-Eventing subscription to scanner `ScanAvailableEvent` notifications
@@ -41,10 +41,11 @@ Known limits:
 
 ## Quick Start
 
-Copy and edit the environment file:
+Copy and edit the example files:
 
 ```bash
 cp .env.example .env
+cp docker-compose.yml.example docker-compose.yml
 ```
 
 Set at least:
@@ -74,7 +75,7 @@ curl http://127.0.0.1:5357/healthz
 Open the scan settings page:
 
 ```bash
-xdg-open http://127.0.0.1:8888/
+xdg-open "http://127.0.0.1:${WSD_ADMIN_PORT:-8888}/"
 ```
 
 ## Docker Networking
@@ -88,7 +89,7 @@ Required traffic:
 
 - UDP `3702` inbound and outbound for WS-Discovery
 - TCP `5357` inbound from the scanner for SOAP/DPWS callbacks
-- TCP `8888` inbound from trusted LAN clients for the settings page
+- TCP `${WSD_ADMIN_PORT:-8888}` inbound from trusted LAN clients for the settings page
 - HTTP from the receiver to the scanner for WS-Eventing and WS-Scan requests
 
 ## Configuration
@@ -102,6 +103,7 @@ Environment variables:
 | `WSD_UUID` | generated | Stable endpoint ID, preferred format `urn:uuid:<uuid>` |
 | `WSD_UUID_FILE` | `/data/wsd-uuid` | File used to persist generated UUID |
 | `WSD_HTTP_PORT` | `5357` | TCP SOAP/DPWS HTTP port |
+| `WSD_ADMIN_PORT` | `8888` | TCP port for the settings web UI |
 | `OUTPUT_DIR` | `/scans` | Directory where scans are written inside the container |
 | `ORIGINAL_DIR` | `/original` | Directory where `Keep original` stores copies inside the container |
 | `WSD_HOST` | auto-detected | IP advertised in WSD `XAddrs`; set this on multi-homed hosts |
@@ -156,7 +158,8 @@ parameters below. The behavior can be tuned in the same section:
 
 These values are sent in the WS-Scan `CreateScanJob` request. They are no
 longer configured with `.env` or `SCAN_*` variables. Open
-`http://127.0.0.1:8888/` and save the form to write `/data/config.json`.
+`http://127.0.0.1:${WSD_ADMIN_PORT:-8888}/` and save the form to write
+`/data/config.json`.
 Changes apply to the next scan job without restarting the service.
 The `Keep original` service parameter defaults to `false` and stores a copy of
 the final scan file in `ORIGINAL_DIR`, including the cropped file when document
@@ -170,7 +173,7 @@ job when a value is unsupported, so change one setting at a time and keep
 The same data is available as JSON:
 
 ```bash
-curl http://127.0.0.1:8888/api/scan-config
+curl "http://127.0.0.1:${WSD_ADMIN_PORT:-8888}/api/scan-config"
 ```
 
 ## Paperless-ngx

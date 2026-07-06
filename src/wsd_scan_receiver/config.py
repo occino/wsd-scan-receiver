@@ -745,6 +745,7 @@ class Config:
     max_post_bytes: int
     scan_ticket: ScanTicketConfig
     uuid_file: Path
+    admin_port: int = 8888
     original_dir: Path = Path("/original")
     scan_ticket_store: ScanTicketStore | None = None
     service_settings_store: ServiceSettingsStore | None = None
@@ -793,6 +794,7 @@ class Config:
             max_post_bytes=_env_positive_int("MAX_POST_BYTES", 100 * 1024 * 1024),
             scan_ticket=scan_ticket_store.get(),
             uuid_file=uuid_file,
+            admin_port=_env_port("WSD_ADMIN_PORT", 8888),
             scan_ticket_store=scan_ticket_store,
             service_settings_store=service_settings_store,
             post_processing_store=post_processing_store,
