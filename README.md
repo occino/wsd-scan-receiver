@@ -73,11 +73,30 @@ docker compose logs -f
 curl http://127.0.0.1:5357/healthz
 ```
 
-Open the scan settings page:
+## Settings Web GUI
+
+The settings web UI listens on `WSD_ADMIN_PORT`, which defaults to `8888`.
+Open it from a trusted LAN browser:
 
 ```bash
 xdg-open "http://127.0.0.1:${WSD_ADMIN_PORT:-8888}/"
 ```
+
+The page writes its settings to `/data/config.json`. Changes apply to the next
+scan job; already running scan jobs are not changed.
+
+The UI has three sections:
+
+- `Service parameters`: device name, advertised host/interface, scanner IP,
+  debug logging, log level, and whether to keep an extra copy in `ORIGINAL_DIR`.
+- `Scan parameters`: values sent to the scanner in the WS-Scan `CreateScanJob`
+  request, such as format, color mode, resolution, and compression quality.
+- `Document Cropping`: crop mode and, when `Crop mode` is `auto`, the automatic
+  crop detection parameters.
+
+Use `Restore defaults` to reset the form to the packaged defaults. This only
+changes the visible form values; click `Save` afterwards to persist them and
+make them active for the next scan job.
 
 ## Docker Networking
 
@@ -142,18 +161,19 @@ stored unchanged.
 The crop behavior assumes the document is aligned with the top-left scanner bed
 corner. In `none` mode no cropping is applied. In `auto` mode it detects the
 free side and bottom edges, then keeps the fixed top-left corner anchored. In
-`DIN-A4` mode it crops a fixed top-left A4 rectangle and ignores the auto tuning
-parameters below. The behavior can be tuned in the same section:
+`DIN-A4` mode it crops a fixed top-left A4 rectangle. The parameters below
+`Crop mode` are only used for `auto` mode and are hidden in the web UI unless
+`auto` is selected:
 
 | Setting | Default | Description |
 | --- | --- | --- |
 | `Crop mode` | `DIN-A4` | `none` skips cropping, `auto` uses automatic document detection, `DIN-A4` crops a fixed A4 rectangle |
-| `Background threshold` | `220` | Corner brightness at or above this value disables auto-cropping |
-| `Document contrast` | `35` | Brightness difference from the detected background needed to identify the document |
-| `Minimum document width (%)` | `50` | Ignore detected crop boxes narrower than this share of the image |
-| `Minimum document height (%)` | `50` | Ignore detected crop boxes shorter than this share of the image |
-| `Side crop padding (px)` | `20` | Pixels added back on the detected free side; for top-left alignment this is the right edge |
-| `Bottom crop padding (px)` | `20` | Pixels added back below the detected document |
+| `Background threshold` | `220` | Auto mode only: corner brightness at or above this value disables auto-cropping |
+| `Document contrast` | `35` | Auto mode only: brightness difference from the detected background needed to identify the document |
+| `Minimum document width (%)` | `50` | Auto mode only: ignore detected crop boxes narrower than this share of the image |
+| `Minimum document height (%)` | `50` | Auto mode only: ignore detected crop boxes shorter than this share of the image |
+| `Side crop padding (px)` | `20` | Auto mode only: pixels added back on the detected free side; for top-left alignment this is the right edge |
+| `Bottom crop padding (px)` | `20` | Auto mode only: pixels added back below the detected document |
 
 ### Scan Ticket Parameters
 
