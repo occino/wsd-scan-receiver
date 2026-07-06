@@ -17,16 +17,19 @@ Implemented today:
 - Basic WS-Discovery `Probe` parsing and `ProbeMatches` responses
 - HTTP SOAP/DPWS endpoint on port `5357`
 - Basic metadata responses for WS-Transfer and WS-MetadataExchange requests
-- Experimental routing for a few common WS-Scan action names
+- WS-Eventing `Subscribe` for `ScanAvailableEvent` destinations
+- WS-Scan push flow: receive `ScanAvailableEvent`, send `CreateScanJob`, then
+  fetch the image with `RetrieveImage`
+- MTOM/XOP multipart image extraction
+- Epson ET-2750-compatible default scan ticket values discovered through WSD
 - Raw POST dumps in debug mode
 - Direct binary/PDF/image POST payload storage in `OUTPUT_DIR`
 
 Not guaranteed yet:
 
 - Full compatibility with any scanner model or firmware
-- Complete WS-Scan job negotiation
-- MTOM/XOP attachment extraction
 - Vendor-specific Epson behavior
+- Automatic profile negotiation beyond the current conservative defaults
 
 WSD push behavior varies by scanner and vendor. Real compatibility will likely
 need packet captures from the scanner you want to support.
@@ -38,7 +41,7 @@ Environment variables:
 | Variable | Default | Description |
 | --- | --- | --- |
 | `WSD_DEVICE_NAME` | `Paperless WSD Scanner` | Name shown to scanners during discovery |
-| `WSD_HOSTNAME` | `paperless-wsd` | Docker container hostname; EpsonScan2 may use this as the front-panel computer name |
+| `WSD_HOSTNAME` | `paperless-wsd` | Docker container hostname |
 | `WSD_UUID` | generated | Stable WSD endpoint UUID; preferred format is `urn:uuid:<uuid>`; persisted in `/data/wsd-uuid` when possible |
 | `WSD_UUID_FILE` | `/data/wsd-uuid` | File used for generated UUID persistence |
 | `WSD_HTTP_PORT` | `5357` | TCP port for SOAP/DPWS HTTP requests |
@@ -50,13 +53,7 @@ Environment variables:
 | `WSD_INTERFACE` | unset | Optional LAN interface for IPv6 WS-Discovery multicast, for example `ens16` |
 | `WSD_SUBSCRIBE_ENABLED` | `false` | Experimental: actively probes WSD scanners and tries WS-Eventing subscription |
 | `WSD_SUBSCRIBE_INTERVAL_SECONDS` | `60` | Interval for active WSD scan-device probes/subscription attempts |
-| `EPSON_PRINTER_IP` | unset | Optional Epson device IP for experimental UDP `3289` discovery polling in debug mode |
-| `EPSONSCAN2_ENABLED` | `false` | Enables the optional native EpsonScan2 push-scan ready bridge |
-| `EPSONSCAN2_LIB_HOST_DIR` | `./epsonscan2-lib` | Compose-only host path containing EpsonScan2 native libraries |
-| `EPSONSCAN2_LIB_DIR` | unset | Container path containing `libes2command.so`, for example `/epsonscan2-lib` |
-| `EPSONSCAN2_LIB_PATH` | unset | Direct path to `libes2command.so`, overrides directory lookup |
-| `EPSONSCAN2_KEEPALIVE` | `true` | Keeps the EpsonScan2 connection open after setting panel push-scan ready |
-| `EPSONSCAN2_REFRESH_SECONDS` | `0` | Experimental: periodically toggles EpsonScan2 push-ready off/on if a scanner forgets the ready state |
+| `EPSON_PRINTER_IP` | unset | Optional Epson device IP for directed WSD discovery when multicast discovery is unreliable |
 
 The compose file also reads `PUID` and `PGID` from `.env` so files written to
 bind-mounted directories are owned by a useful host user.
@@ -98,12 +95,6 @@ WSD_INTERFACE=
 WSD_SUBSCRIBE_ENABLED=false
 WSD_SUBSCRIBE_INTERVAL_SECONDS=60
 EPSON_PRINTER_IP=
-EPSONSCAN2_ENABLED=false
-EPSONSCAN2_LIB_HOST_DIR=./epsonscan2-lib
-EPSONSCAN2_LIB_DIR=/epsonscan2-lib
-EPSONSCAN2_LIB_PATH=
-EPSONSCAN2_KEEPALIVE=true
-EPSONSCAN2_REFRESH_SECONDS=0
 WSD_DEBUG=false
 LOG_LEVEL=INFO
 ```
@@ -120,6 +111,12 @@ client: it sends active scan-device probes and attempts a WS-Eventing
 `Subscribe` to discovered scanner service addresses. This is the path Windows
 uses before a scanner can send `ScanAvailableEvent` push notifications.
 
+When a scanner posts `ScanAvailableEvent`, the receiver starts the WS-Scan
+client-side job flow: `CreateScanJob` echoes the scanner's `ScanIdentifier` and
+the subscription's `DestinationToken`, then `RetrieveImage` fetches the scanned
+image. Epson ET-2750 testing showed the device accepts `exif` scan output and
+returns a JPEG/Exif payload in a multipart XOP response.
+
 Discovery responses advertise the configured device name and metadata/scanner
 URLs. The HTTP server exposes basic metadata at `/`, `/metadata`, `/device`, and
 `/scanner`, and accepts SOAP or binary POSTs at the same server.
@@ -131,36 +128,8 @@ If a POST body looks like SOAP/XML, the service parses the SOAP envelope and
 routes known action names. Unknown SOAP actions return a SOAP fault and are
 logged instead of crashing the process.
 
-With `DEBUG=true`, every incoming POST is also written to `RAW_DUMP_DIR`.
-Debug mode also starts experimental Epson traffic listeners on UDP `3289`,
-UDP/TCP `2968`, and TCP `1865`. These are not a complete Epson Event Manager
-implementation; they exist to capture whether Epson push-scan discovery is
-reaching the host. If `EPSON_PRINTER_IP` is set, debug mode also sends the
-observed Epson UDP `3289` discovery query periodically and opens a capture-driven
-TCP `1865` scanner-status session similar to Epson's macOS software.
-
-### Optional EpsonScan2 Push-Scan Bridge
-
-Some Epson models appear to require EpsonScan2's native
-`SetPanelToPushScanReady(true)` state before the front-panel "Scan to Computer"
-target is shown. The image includes a small helper, `epsonscan2-push-ready`,
-which dynamically loads Epson's `libes2command.so` and calls that native API.
-
-This is disabled by default because EpsonScan2 is not redistributed in this
-image. To test it, install or build EpsonScan2 on the host, mount the directory
-that contains `libes2command.so`, then set:
-
-```dotenv
-EPSONSCAN2_ENABLED=true
-EPSONSCAN2_LIB_HOST_DIR=/path/to/epsonscan2/lib
-EPSONSCAN2_LIB_DIR=/epsonscan2-lib
-EPSONSCAN2_REFRESH_SECONDS=20
-```
-
-If the bridge starts successfully, logs should show
-`epsonscan2_push_scan_ready_set`. With refresh enabled, logs should also show
-`epsonscan2_push_scan_ready_refreshed`. If it logs that `libes2command.so` is missing,
-the mount path or `EPSONSCAN2_LIB_DIR` is wrong.
+With `DEBUG=true`, every incoming POST, outgoing SOAP request, RetrieveImage
+response, and SOAP error response is also written to `RAW_DUMP_DIR`.
 
 ## Test Discovery
 
@@ -263,6 +232,5 @@ The protocol modules are split by responsibility:
 Good next extensions:
 
 - Add handlers based on real Epson ET-2750 captures.
-- Parse MTOM multipart requests and extract image attachments.
-- Persist richer job state for `CreateScanJob`, status, and retrieval flows.
+- Persist richer job state for status and multi-page retrieval flows.
 - Add configurable advertised scopes/types if another scanner expects them.

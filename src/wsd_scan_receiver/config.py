@@ -88,13 +88,6 @@ class Config:
     host_ip: str
     interface: str | None
     epson_printer_ip: str | None
-    epsonscan2_enabled: bool
-    epsonscan2_helper: str
-    epsonscan2_lib_path: str | None
-    epsonscan2_lib_dir: str | None
-    epsonscan2_keepalive: bool
-    epsonscan2_refresh_seconds: int
-    epson_debug_enabled: bool
     wsd_subscribe_enabled: bool
     wsd_subscribe_interval_seconds: int
     uuid_file: Path
@@ -121,16 +114,6 @@ class Config:
             host_ip=detect_host_ip(),
             interface=os.getenv("WSD_INTERFACE") or None,
             epson_printer_ip=os.getenv("EPSON_PRINTER_IP") or None,
-            epsonscan2_enabled=parse_bool(os.getenv("EPSONSCAN2_ENABLED"), default=False),
-            epsonscan2_helper=os.getenv(
-                "EPSONSCAN2_HELPER",
-                "/usr/local/bin/epsonscan2-push-ready",
-            ),
-            epsonscan2_lib_path=os.getenv("EPSONSCAN2_LIB_PATH") or None,
-            epsonscan2_lib_dir=os.getenv("EPSONSCAN2_LIB_DIR") or None,
-            epsonscan2_keepalive=parse_bool(os.getenv("EPSONSCAN2_KEEPALIVE"), default=True),
-            epsonscan2_refresh_seconds=_env_int("EPSONSCAN2_REFRESH_SECONDS", 0),
-            epson_debug_enabled=parse_bool(os.getenv("EPSON_DEBUG_ENABLED"), default=False),
             wsd_subscribe_enabled=parse_bool(
                 os.getenv("WSD_SUBSCRIBE_ENABLED"),
                 default=False,

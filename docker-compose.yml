@@ -22,19 +22,9 @@ services:
       # ScanAvailableEvent notifications.
       WSD_SUBSCRIBE_ENABLED: "${WSD_SUBSCRIBE_ENABLED:-false}"
       WSD_SUBSCRIBE_INTERVAL_SECONDS: "${WSD_SUBSCRIBE_INTERVAL_SECONDS:-60}"
-      # Optional: Epson printer IP for active Epson UDP 3289 discovery polling.
+      # Optional: Epson printer IP for directed WSD discovery when multicast
+      # discovery is unreliable. This still uses WSD/DPWS only.
       EPSON_PRINTER_IP: "${EPSON_PRINTER_IP:-}"
-      # Optional: enable EpsonScan2 native push-scan ready bridge. Requires
-      # libes2command.so to be mounted and EPSONSCAN2_LIB_DIR or
-      # EPSONSCAN2_LIB_PATH to be set.
-      EPSONSCAN2_ENABLED: "${EPSONSCAN2_ENABLED:-false}"
-      EPSONSCAN2_LIB_DIR: "${EPSONSCAN2_LIB_DIR:-}"
-      EPSONSCAN2_LIB_PATH: "${EPSONSCAN2_LIB_PATH:-}"
-      EPSONSCAN2_KEEPALIVE: "${EPSONSCAN2_KEEPALIVE:-true}"
-      EPSONSCAN2_REFRESH_SECONDS: "${EPSONSCAN2_REFRESH_SECONDS:-0}"
-      # Optional low-level Epson protocol debugging. Leave disabled for normal
-      # WSD use because it opens Epson-specific ports and polls the printer.
-      EPSON_DEBUG_ENABLED: "${EPSON_DEBUG_ENABLED:-false}"
       DEBUG: "${WSD_DEBUG:-false}"
       RAW_DUMP_DIR: "/debug-dumps"
       LOG_LEVEL: "${LOG_LEVEL:-INFO}"
@@ -45,8 +35,5 @@ services:
       - ${DEBUG_DUMPS_DIR:-./debug-dumps}:/debug-dumps
       # Persists the generated endpoint UUID across container restarts.
       - ${DATA_DIR:-./data}:/data
-      # Optional: mount the EpsonScan2 library directory containing
-      # libes2command.so, then set EPSONSCAN2_LIB_DIR=/epsonscan2-lib.
-      - ${EPSONSCAN2_LIB_HOST_DIR:-./epsonscan2-lib}:/epsonscan2-lib:ro
 
     restart: unless-stopped

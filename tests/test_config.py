@@ -83,30 +83,8 @@ def test_config_from_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
     assert config.debug is True
     assert config.host_ip == "192.0.2.10"
     assert config.metadata_url == "http://192.0.2.10:9999/metadata"
-    assert config.epsonscan2_enabled is False
-    assert config.epson_debug_enabled is False
     assert config.wsd_subscribe_enabled is False
     assert config.wsd_subscribe_interval_seconds == 60
-
-
-def test_config_from_env_epsonscan2(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setenv("WSD_HOST", "192.0.2.10")
-    monkeypatch.setenv("WSD_UUID_FILE", str(tmp_path / "uuid"))
-    monkeypatch.setenv("EPSONSCAN2_ENABLED", "true")
-    monkeypatch.setenv("EPSONSCAN2_HELPER", "/helper")
-    monkeypatch.setenv("EPSONSCAN2_LIB_PATH", "/lib/libes2command.so")
-    monkeypatch.setenv("EPSONSCAN2_LIB_DIR", "/lib")
-    monkeypatch.setenv("EPSONSCAN2_KEEPALIVE", "false")
-    monkeypatch.setenv("EPSONSCAN2_REFRESH_SECONDS", "20")
-
-    config = Config.from_env()
-
-    assert config.epsonscan2_enabled is True
-    assert config.epsonscan2_helper == "/helper"
-    assert config.epsonscan2_lib_path == "/lib/libes2command.so"
-    assert config.epsonscan2_lib_dir == "/lib"
-    assert config.epsonscan2_keepalive is False
-    assert config.epsonscan2_refresh_seconds == 20
 
 
 def test_config_from_env_wsd_subscribe(
@@ -121,15 +99,3 @@ def test_config_from_env_wsd_subscribe(
 
     assert config.wsd_subscribe_enabled is True
     assert config.wsd_subscribe_interval_seconds == 15
-
-
-def test_config_from_env_epson_debug(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("WSD_HOST", "192.0.2.10")
-    monkeypatch.setenv("WSD_UUID_FILE", str(tmp_path / "uuid"))
-    monkeypatch.setenv("EPSON_DEBUG_ENABLED", "true")
-
-    config = Config.from_env()
-
-    assert config.epson_debug_enabled is True
