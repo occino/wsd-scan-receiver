@@ -3,8 +3,9 @@
 Self-hosted WSD/WS-Scan push receiver for network scanners.
 
 The service appears on the LAN as a "Scan to Computer (WSD)" destination and
-saves received scans into a configurable directory, typically the Paperless-ngx
-consume folder. It is designed to run in Docker with host networking.
+saves received scans into a configurable output directory. It is designed to run
+in Docker with host networking and can write directly to another application's
+scan import directory.
 
 ## Status
 
@@ -47,9 +48,8 @@ cp .env.example .env
 Set at least:
 
 ```dotenv
-CONSUME_DIR=/path/to/paperless/consume
+SCAN_DIR=/path/to/scan-output
 WSD_DEVICE_NAME=Paperless
-WSD_HOST=192.168.0.8
 WSD_INTERFACE=ens16
 WSD_SUBSCRIBE_ENABLED=true
 WSD_SCANNER_IP=192.168.0.21
@@ -93,7 +93,7 @@ Environment variables:
 | `WSD_UUID` | generated | Stable endpoint ID, preferred format `urn:uuid:<uuid>` |
 | `WSD_UUID_FILE` | `/data/wsd-uuid` | File used to persist generated UUID |
 | `WSD_HTTP_PORT` | `5357` | TCP SOAP/DPWS HTTP port |
-| `OUTPUT_DIR` | `/consume` | Directory where scans are written |
+| `OUTPUT_DIR` | `/scans` | Directory where scans are written inside the container |
 | `WSD_HOST` | auto-detected | IP advertised in WSD `XAddrs`; set this on multi-homed hosts |
 | `WSD_INTERFACE` | unset | LAN interface for IPv6 WS-Discovery, for example `ens16` |
 | `WSD_SUBSCRIBE_ENABLED` | `false` | Actively subscribe this receiver as a WSD scan destination |
@@ -111,7 +111,7 @@ Compose-specific `.env` variables:
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `CONSUME_DIR` | `./consume` | Host directory mounted as `/consume` |
+| `SCAN_DIR` | `./scans` | Host directory mounted as `/scans` |
 | `DEBUG_DUMPS_DIR` | `./debug-dumps` | Host directory mounted as `/debug-dumps` |
 | `DATA_DIR` | `./data` | Host directory mounted as `/data` |
 | `PUID` | `1000` | Container user ID for file writes |
@@ -149,17 +149,17 @@ job when a value is unsupported, so change one setting at a time and keep
 
 ## Paperless-ngx
 
-Point `CONSUME_DIR` at a Paperless-ngx consume directory:
+Point `SCAN_DIR` at the directory where Paperless-ngx imports new scan files:
 
 ```dotenv
-CONSUME_DIR=/srv/paperless/consume
+SCAN_DIR=/srv/paperless/import
 PUID=1000
 PGID=1000
 ```
 
 The receiver writes timestamped files such as `scan-20260706T170000.000000Z-abc12345.jpg`.
-Paperless-ngx should import them on its normal consume schedule. If files appear
-but Paperless does not consume them, check ownership and Paperless logs.
+Paperless-ngx should import them on its normal scan import schedule. If files
+appear but Paperless does not pick them up, check ownership and Paperless logs.
 
 ## How It Works
 
@@ -249,7 +249,7 @@ Receiver appears, but scan does not complete:
 
 Files are not written:
 
-- Confirm `CONSUME_DIR` exists and is writable by `PUID:PGID`.
+- Confirm `SCAN_DIR` exists and is writable by `PUID:PGID`.
 - Check container logs for permission errors.
 - Confirm `/healthz` responds.
 - Temporarily enable `WSD_DEBUG=true` to verify that HTTP POSTs arrive.
@@ -275,7 +275,7 @@ ruff check .
 Run locally:
 
 ```bash
-DEBUG=true OUTPUT_DIR=./consume RAW_DUMP_DIR=./debug-dumps WSD_HOST=<your-lan-ip> \
+DEBUG=true OUTPUT_DIR=./scans RAW_DUMP_DIR=./debug-dumps WSD_HOST=<your-lan-ip> \
   WSD_SUBSCRIBE_ENABLED=true WSD_SCANNER_IP=<scanner-ip> \
   python -m wsd_scan_receiver.main
 ```

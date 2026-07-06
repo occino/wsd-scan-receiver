@@ -72,7 +72,7 @@ def test_config_from_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
     monkeypatch.setenv("WSD_UUID_FILE", str(tmp_path / "uuid"))
     monkeypatch.setenv("WSD_DEVICE_NAME", "Office Scanner")
     monkeypatch.setenv("WSD_HTTP_PORT", "9999")
-    monkeypatch.setenv("OUTPUT_DIR", str(tmp_path / "consume"))
+    monkeypatch.setenv("OUTPUT_DIR", str(tmp_path / "scans"))
     monkeypatch.setenv("RAW_DUMP_DIR", str(tmp_path / "dumps"))
     monkeypatch.setenv("DEBUG", "true")
     monkeypatch.setenv("WSD_SCANNER_IP", "192.0.2.21")

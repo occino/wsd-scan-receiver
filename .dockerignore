@@ -7,6 +7,6 @@ build/
 dist/
 *.egg-info/
 
-consume/
+scans/
 debug-dumps/
 data/

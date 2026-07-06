@@ -15,7 +15,7 @@ def _config(tmp_path: Path, port: int = 0) -> Config:
         device_name="Test Scanner",
         endpoint_uuid="uuid:test",
         http_port=port,
-        output_dir=tmp_path / "consume",
+        output_dir=tmp_path / "scans",
         debug=True,
         raw_dump_dir=tmp_path / "dumps",
         log_level="INFO",
@@ -105,7 +105,7 @@ def test_http_post_binary_payload_writes_scan(tmp_path: Path) -> None:
         thread.join(timeout=2)
 
     assert response.status == 202
-    scans = list((tmp_path / "consume").glob("scan-*.pdf"))
+    scans = list((tmp_path / "scans").glob("scan-*.pdf"))
     assert scans
     assert scans[0].read_bytes().startswith(b"%PDF")
 

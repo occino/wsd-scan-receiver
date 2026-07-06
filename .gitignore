@@ -9,7 +9,7 @@ build/
 dist/
 *.egg-info/
 
-consume/
+scans/
 debug-dumps/
 data/
 epsonscan2-lib/

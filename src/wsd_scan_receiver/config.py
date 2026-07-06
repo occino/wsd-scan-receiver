@@ -163,7 +163,7 @@ class Config:
             device_name=device_name,
             endpoint_uuid=load_or_create_uuid(uuid_file),
             http_port=_env_port("WSD_HTTP_PORT", 5357),
-            output_dir=Path(os.getenv("OUTPUT_DIR", "/consume")),
+            output_dir=Path(os.getenv("OUTPUT_DIR", "/scans")),
             debug=parse_bool(os.getenv("DEBUG"), default=False),
             raw_dump_dir=Path(os.getenv("RAW_DUMP_DIR", "/debug-dumps")),
             log_level=os.getenv("LOG_LEVEL", "INFO").upper(),

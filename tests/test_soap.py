@@ -18,7 +18,7 @@ def _config(tmp_path: Path) -> Config:
         device_name="Test Scanner",
         endpoint_uuid="uuid:test",
         http_port=5357,
-        output_dir=tmp_path / "consume",
+        output_dir=tmp_path / "scans",
         debug=False,
         raw_dump_dir=tmp_path / "dumps",
         log_level="INFO",
