@@ -178,17 +178,48 @@ curl "http://127.0.0.1:${WSD_ADMIN_PORT:-8888}/api/scan-config"
 
 ## Paperless-ngx
 
-Point `SCAN_DIR` at the directory where Paperless-ngx imports new scan files:
+The most common setup is to let this receiver write directly into the
+Paperless-ngx consume directory. In that case, both containers should reference
+the same host directory:
+
+- Paperless-ngx mounts it as its consume directory, usually `/usr/src/paperless/consume`.
+- WSD Scan Receiver mounts the same host directory as `/scans` through `SCAN_DIR`.
+
+Example `.env` for this project:
 
 ```dotenv
-SCAN_DIR=/srv/paperless/import
+SCAN_DIR=/srv/paperless/consume
 PUID=1000
 PGID=1000
 ```
 
+Matching Paperless-ngx compose volume:
+
+```yaml
+services:
+  paperless-webserver:
+    volumes:
+      - /srv/paperless/consume:/usr/src/paperless/consume
+```
+
+With the default `docker-compose.yml.example`, the receiver then mounts the same
+directory like this:
+
+```yaml
+volumes:
+  - ${SCAN_DIR:-./scans}:/scans
+```
+
 The receiver writes timestamped files such as `scan-20260706T170000.000000Z-abc12345.jpg`.
 Paperless-ngx should import them on its normal scan import schedule. If files
-appear but Paperless does not pick them up, check ownership and Paperless logs.
+appear but Paperless does not pick them up, check ownership, Paperless logs, and
+whether the Paperless container sees the file inside
+`/usr/src/paperless/consume`.
+
+`Keep original` is separate from the Paperless consume flow. When enabled, it
+stores a copy in `ORIGINAL_DIR`; that directory should usually not be mounted as
+the Paperless consume directory, otherwise Paperless may import both the final
+scan and the retained copy.
 
 ## How It Works
 
