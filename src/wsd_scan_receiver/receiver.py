@@ -18,7 +18,7 @@ from socketserver import TCPServer
 from typing import Any
 from xml.etree.ElementTree import ParseError
 
-from .config import Config, PostProcessingSettings, ServiceSettings
+from .config import Config, PostProcessingSettings, ScanTicketConfig, ServiceSettings
 from .post_processing import store_scan_payload
 from .soap import device_metadata_xml, parse_soap_envelope, route_soap_request, soap_envelope
 
@@ -96,6 +96,12 @@ def post_processing_settings(config: Config) -> PostProcessingSettings:
     return config.post_processing_store.get()
 
 
+def scan_ticket(config: Config) -> ScanTicketConfig:
+    if config.scan_ticket_store is None:
+        return config.scan_ticket
+    return config.scan_ticket_store.get()
+
+
 def service_settings(config: Config) -> ServiceSettings:
     if config.service_settings_store is not None:
         return config.service_settings_store.get()
@@ -104,6 +110,7 @@ def service_settings(config: Config) -> ServiceSettings:
         wsd_host=config.host_ip,
         wsd_interface=config.interface or "",
         wsd_scanner_ip=config.scanner_ip or "",
+        keep_original=False,
         debug=config.debug,
         log_level=config.log_level,
     )
@@ -115,6 +122,10 @@ def is_debug_enabled(config: Config) -> bool:
 
 def advertised_host_ip(config: Config) -> str:
     return service_settings(config).wsd_host or config.host_ip
+
+
+def original_output_dir(config: Config) -> Path | None:
+    return config.original_dir if service_settings(config).keep_original else None
 
 
 def read_chunked_body(stream: BufferedIOBase, *, max_bytes: int | None = None) -> bytes:
@@ -226,6 +237,8 @@ class WsdRequestHandler(BaseHTTPRequestHandler):
             suffix,
             payload,
             post_processing_settings=post_processing_settings(self.config),
+            original_dir=original_output_dir(self.config),
+            jpeg_quality=scan_ticket(self.config).compression_quality,
         )
         LOGGER.info(
             "stored scan payload",

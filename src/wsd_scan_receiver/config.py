@@ -116,6 +116,7 @@ class ServiceSettings:
     wsd_host: str
     wsd_interface: str
     wsd_scanner_ip: str
+    keep_original: bool
     debug: bool
     log_level: str
 
@@ -125,13 +126,20 @@ class PostProcessingSettings:
     """Configurable scan post-processing settings."""
 
     enabled: bool = True
-    crop_mode: str = "auto"
+    crop_mode: str = "DIN-A4"
     background_threshold: int = 220
     document_contrast: int = 35
     min_document_width_percent: int = 50
     min_document_height_percent: int = 50
-    crop_side_padding: int = 0
-    crop_bottom_padding: int = 0
+    crop_side_padding: int = 20
+    crop_bottom_padding: int = 20
+
+
+@dataclass(frozen=True)
+class UiSettings:
+    """Configurable admin UI preferences."""
+
+    show_fixed_scan_parameters: bool = False
 
 
 SERVICE_SETTINGS_FIELDS = {
@@ -139,6 +147,7 @@ SERVICE_SETTINGS_FIELDS = {
     "WSD_HOST",
     "WSD_INTERFACE",
     "WSD_SCANNER_IP",
+    "KEEP_ORIGINAL",
     "DEBUG",
     "LOG_LEVEL",
 }
@@ -154,6 +163,7 @@ POST_PROCESSING_FIELDS = {
     "crop_side_padding",
     "crop_bottom_padding",
 }
+UI_SETTINGS_FIELDS = {"show_fixed_scan_parameters"}
 
 
 def normalize_endpoint_uuid(value: str) -> str:
@@ -263,6 +273,7 @@ def service_settings_to_dict(settings: ServiceSettings) -> dict[str, str | bool]
         "WSD_HOST": settings.wsd_host,
         "WSD_INTERFACE": settings.wsd_interface,
         "WSD_SCANNER_IP": settings.wsd_scanner_ip,
+        "KEEP_ORIGINAL": settings.keep_original,
         "DEBUG": settings.debug,
         "LOG_LEVEL": settings.log_level,
     }
@@ -274,9 +285,15 @@ def _service_settings_from_env() -> ServiceSettings:
         wsd_host=os.getenv("WSD_HOST", "").strip(),
         wsd_interface=os.getenv("WSD_INTERFACE", "").strip(),
         wsd_scanner_ip=(configured_scanner_ip() or "").strip(),
+        keep_original=parse_bool(os.getenv("KEEP_ORIGINAL"), default=False),
         debug=parse_bool(os.getenv("DEBUG"), default=False),
         log_level=os.getenv("LOG_LEVEL", "INFO").strip().upper(),
     )
+
+
+def load_service_settings_defaults() -> ServiceSettings:
+    """Return service defaults before persisted config overrides are applied."""
+    return _service_settings_from_env()
 
 
 def _coerce_service_bool(name: str, value: Any) -> bool:
@@ -331,6 +348,7 @@ def service_settings_from_mapping(
         wsd_host=str(merged["WSD_HOST"]).strip(),
         wsd_interface=str(merged["WSD_INTERFACE"]).strip(),
         wsd_scanner_ip=str(merged["WSD_SCANNER_IP"]).strip(),
+        keep_original=_coerce_service_bool("KEEP_ORIGINAL", merged["KEEP_ORIGINAL"]),
         debug=_coerce_service_bool("DEBUG", merged["DEBUG"]),
         log_level=log_level,
     )
@@ -498,6 +516,63 @@ class PostProcessingSettingsStore:
         with self._lock:
             settings = post_processing_settings_from_mapping(values, base=self._settings)
             save_post_processing_settings(self.config_file, settings)
+            self._settings = settings
+            return settings
+
+
+def ui_settings_to_dict(settings: UiSettings) -> dict[str, bool]:
+    """Return admin UI settings using JSON field names."""
+    return {"show_fixed_scan_parameters": settings.show_fixed_scan_parameters}
+
+
+def ui_settings_from_mapping(
+    values: Mapping[str, Any],
+    *,
+    base: UiSettings | None = None,
+) -> UiSettings:
+    """Build admin UI settings from JSON/form values."""
+    merged: dict[str, Any] = ui_settings_to_dict(base or UiSettings())
+    merged.update(values)
+    missing = sorted(UI_SETTINGS_FIELDS - merged.keys())
+    if missing:
+        raise ValueError(f"missing UI config fields: {', '.join(missing)}")
+    return UiSettings(
+        show_fixed_scan_parameters=_coerce_service_bool(
+            "ui.show_fixed_scan_parameters",
+            merged["show_fixed_scan_parameters"],
+        )
+    )
+
+
+def load_ui_settings(config_file: Path = SCAN_CONFIG_FILE) -> UiSettings:
+    """Load admin UI settings from persisted config."""
+    return ui_settings_from_mapping(_config_section(config_file, "ui"), base=UiSettings())
+
+
+def save_ui_settings(config_file: Path, settings: UiSettings) -> None:
+    """Persist admin UI settings as the ui section."""
+    _write_config_section(config_file, "ui", ui_settings_to_dict(settings))
+
+
+class UiSettingsStore:
+    """Thread-safe admin UI settings store backed by config.json."""
+
+    def __init__(self, config_file: Path = SCAN_CONFIG_FILE) -> None:
+        self.config_file = config_file
+        self._lock = threading.Lock()
+        self._settings = load_ui_settings(config_file)
+
+    def get(self) -> UiSettings:
+        with self._lock:
+            return self._settings
+
+    def as_dict(self) -> dict[str, bool]:
+        return ui_settings_to_dict(self.get())
+
+    def update(self, values: Mapping[str, Any]) -> UiSettings:
+        with self._lock:
+            settings = ui_settings_from_mapping(values, base=self._settings)
+            save_ui_settings(self.config_file, settings)
             self._settings = settings
             return settings
 
@@ -670,9 +745,11 @@ class Config:
     max_post_bytes: int
     scan_ticket: ScanTicketConfig
     uuid_file: Path
+    original_dir: Path = Path("/original")
     scan_ticket_store: ScanTicketStore | None = None
     service_settings_store: ServiceSettingsStore | None = None
     post_processing_store: PostProcessingSettingsStore | None = None
+    ui_settings_store: UiSettingsStore | None = None
 
     @property
     def metadata_url(self) -> str:
@@ -688,6 +765,7 @@ class Config:
         service_settings_store = ServiceSettingsStore(SCAN_CONFIG_FILE)
         service_settings = service_settings_store.get()
         post_processing_store = PostProcessingSettingsStore(SCAN_CONFIG_FILE)
+        ui_settings_store = UiSettingsStore(SCAN_CONFIG_FILE)
         scan_ticket_store = ScanTicketStore(SCAN_CONFIG_FILE, SCAN_DEFAULTS_FILE)
         device_name = service_settings.wsd_device_name
         if not device_name:
@@ -697,6 +775,7 @@ class Config:
             endpoint_uuid=load_or_create_uuid(uuid_file),
             http_port=_env_port("WSD_HTTP_PORT", 5357),
             output_dir=Path(os.getenv("OUTPUT_DIR", "/scans")),
+            original_dir=Path(os.getenv("ORIGINAL_DIR", "/original")),
             debug=service_settings.debug,
             raw_dump_dir=Path(os.getenv("RAW_DUMP_DIR", "/debug-dumps")),
             log_level=service_settings.log_level,
@@ -717,4 +796,5 @@ class Config:
             scan_ticket_store=scan_ticket_store,
             service_settings_store=service_settings_store,
             post_processing_store=post_processing_store,
+            ui_settings_store=ui_settings_store,
         )

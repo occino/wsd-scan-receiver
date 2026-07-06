@@ -20,15 +20,23 @@ from .config import (
     SCAN_TICKET_POSITIVE_INT_FIELDS,
     SCAN_TICKET_TEXT_FIELDS,
     SERVICE_SETTINGS_FIELDS,
+    UI_SETTINGS_FIELDS,
+    PostProcessingSettings,
     PostProcessingSettingsStore,
     ScanTicketStore,
     ServiceSettingsStore,
+    UiSettings,
+    UiSettingsStore,
+    load_scan_ticket_defaults,
+    load_service_settings_defaults,
     post_processing_settings_from_mapping,
     post_processing_settings_to_dict,
     scan_ticket_from_mapping,
     scan_ticket_to_dict,
     service_settings_from_mapping,
     service_settings_to_dict,
+    ui_settings_from_mapping,
+    ui_settings_to_dict,
 )
 from .receiver import ThreadingHTTPServerNoFqdn, ThreadingHTTPServerV6
 
@@ -63,27 +71,45 @@ SCAN_FIELD_HELP = {
     "input_source": (
         "Scanner input source used when the event does not provide one. Values: Auto, Platen."
     ),
-    "content_type": "Scanner image optimization hint. Values: Text, Photo, Mixed.",
+    "content_type": "Scanner image optimization hint. The ET-2750 WSD capabilities report Text.",
     "color_processing": (
         "Color mode requested from the scanner. Values: RGB24, Grayscale8, BlackAndWhite1."
     ),
-    "resolution": (
-        "Horizontal and vertical scan resolution in DPI. Positive integer; common values: 100, 300."
+    "resolution": "Horizontal and vertical scan resolution in DPI. Values: 100, 300.",
+    "compression_quality": (
+        "Compression quality for compressed formats. The ET-2750 WSD capabilities report 50."
     ),
-    "compression_quality": "Compression quality for compressed formats. Range: 1-100.",
-    "images_to_transfer": "Number of images requested for one job. Positive integer; usually 1.",
-    "width": "Input media width in WSD units. Positive integer from scanner capabilities.",
-    "height": "Input media height in WSD units. Positive integer from scanner capabilities.",
-    "region_x": "Scan region X offset in WSD units. Integer; 0 starts at the left edge.",
-    "region_y": "Scan region Y offset in WSD units. Integer; 0 starts at the top edge.",
-    "region_width": "Scan region width in WSD units. Positive integer from scanner capabilities.",
-    "region_height": "Scan region height in WSD units. Positive integer from scanner capabilities.",
+    "images_to_transfer": "Number of images requested for one job. The ET-2750 default is 1.",
+    "width": "Input media width in WSD units. ET-2750 platen maximum: 8500.",
+    "height": "Input media height in WSD units. ET-2750 platen maximum: 11700.",
+    "region_x": "Scan region X offset in WSD units. 0 starts at the left edge.",
+    "region_y": "Scan region Y offset in WSD units. 0 starts at the top edge.",
+    "region_width": "Scan region width in WSD units. ET-2750 platen maximum: 8500.",
+    "region_height": "Scan region height in WSD units. ET-2750 platen maximum: 11700.",
     "brightness": "Scanner-dependent brightness adjustment. Integer; 0 is neutral.",
     "contrast": "Scanner-dependent contrast adjustment. Integer; 0 is neutral.",
     "sharpness": "Scanner-dependent sharpness adjustment. Integer; 0 is neutral.",
-    "rotation": "Rotation requested from the scanner. Values: 0, 90, 180, 270.",
-    "scaling_width": "Horizontal scaling percentage. Positive integer; 100 means no scaling.",
-    "scaling_height": "Vertical scaling percentage. Positive integer; 100 means no scaling.",
+    "rotation": "Rotation requested from the scanner. The ET-2750 WSD capabilities report 0.",
+    "scaling_width": "Horizontal scaling percentage. The ET-2750 WSD capabilities report 100.",
+    "scaling_height": "Vertical scaling percentage. The ET-2750 WSD capabilities report 100.",
+}
+SCAN_FIELD_UI_OPTIONS = {
+    "format": ["exif", "tiff-single-uncompressed"],
+    "input_source": ["Auto", "Platen"],
+    "content_type": ["Text"],
+    "color_processing": ["RGB24", "Grayscale8", "BlackAndWhite1"],
+    "resolution": ["100", "300"],
+    "compression_quality": ["50"],
+    "images_to_transfer": ["1"],
+    "width": ["8500"],
+    "height": ["11700"],
+    "region_x": ["0"],
+    "region_y": ["0"],
+    "region_width": ["8500"],
+    "region_height": ["11700"],
+    "rotation": ["0"],
+    "scaling_width": ["100"],
+    "scaling_height": ["100"],
 }
 SCAN_FIELD_ORDER = [
     "format",
@@ -111,6 +137,7 @@ SERVICE_FIELD_LABELS = {
     "WSD_HOST": "Advertised host",
     "WSD_INTERFACE": "Network interface",
     "WSD_SCANNER_IP": "Scanner IP",
+    "KEEP_ORIGINAL": "Keep original",
     "DEBUG": "Debug logging",
     "LOG_LEVEL": "Log level",
 }
@@ -124,6 +151,9 @@ SERVICE_FIELD_HELP = {
         "Value: empty or an interface name such as ens16."
     ),
     "WSD_SCANNER_IP": "Scanner IP for directed WSD probing. Value: empty or an IPv4/IPv6 address.",
+    "KEEP_ORIGINAL": (
+        "When checked, store a copy of each final scan file in ORIGINAL_DIR."
+    ),
     "DEBUG": "Enable verbose logging and raw debug dumps. Values: false, true.",
     "LOG_LEVEL": "Python log verbosity. Values: CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET.",
 }
@@ -132,6 +162,7 @@ SERVICE_FIELD_ORDER = [
     "WSD_HOST",
     "WSD_INTERFACE",
     "WSD_SCANNER_IP",
+    "KEEP_ORIGINAL",
     "DEBUG",
     "LOG_LEVEL",
 ]
@@ -176,14 +207,26 @@ POST_PROCESSING_FIELD_ORDER = [
     "crop_side_padding",
     "crop_bottom_padding",
 ]
+SHOW_FIXED_SCAN_FIELDS_NAME = "show_fixed_scan_parameters"
+SHOW_FIXED_SCAN_FIELDS_HELP = (
+    "When checked, scan parameters with fixed scanner capability values remain visible."
+)
 
 
-def _row(label: str, name: str, control: str, help_text: str) -> str:
+def _row(
+    label: str,
+    name: str,
+    control: str,
+    help_text: str,
+    *,
+    css_class: str = "",
+) -> str:
     escaped_name = html.escape(name)
     escaped_label = html.escape(label)
     escaped_help = html.escape(help_text, quote=True)
+    class_attr = f' class="{html.escape(css_class, quote=True)}"' if css_class else ""
     return (
-        f'<tr><th><label for="{escaped_name}">{escaped_label}</label>'
+        f"<tr{class_attr}><th><label for=\"{escaped_name}\">{escaped_label}</label>"
         f'<span class="help" tabindex="0" data-tooltip="{escaped_help}" '
         f'aria-label="{escaped_help}">?</span></th>'
         f"<td>{control}</td></tr>"
@@ -194,17 +237,33 @@ def _select_for(name: str, value: str | int | bool, options: list[str]) -> str:
     escaped_name = html.escape(name)
     option_html = []
     selected_value = str(value).lower() if isinstance(value, bool) else str(value)
+    disabled = " disabled" if len(options) == 1 else ""
     for option in options:
         selected = " selected" if str(option) == selected_value else ""
         escaped_option = html.escape(str(option))
         option_html.append(f'<option value="{escaped_option}"{selected}>{escaped_option}</option>')
-    return f'<select id="{escaped_name}" name="{escaped_name}">{"".join(option_html)}</select>'
+    return (
+        f'<select id="{escaped_name}" name="{escaped_name}"{disabled}>'
+        f'{"".join(option_html)}</select>'
+    )
+
+
+def _checkbox_for(name: str, value: bool) -> str:
+    escaped_name = html.escape(name)
+    checked = " checked" if value else ""
+    return (
+        f'<input id="{escaped_name}" name="{escaped_name}" '
+        f'type="checkbox" value="true"{checked}>'
+    )
 
 
 def _scan_input_for(name: str, value: str | int) -> str:
     label = SCAN_FIELD_LABELS[name]
     escaped_name = html.escape(name)
-    if name in SCAN_TICKET_TEXT_FIELDS or name in SCAN_TICKET_ALLOWED_VALUES:
+    ui_options = SCAN_FIELD_UI_OPTIONS.get(name)
+    if ui_options is not None:
+        control = _select_for(name, value, ui_options)
+    elif name in SCAN_TICKET_TEXT_FIELDS or name in SCAN_TICKET_ALLOWED_VALUES:
         allowed = SCAN_TICKET_ALLOWED_VALUES.get(name)
         if allowed is not None:
             control = _select_for(name, value, [str(option) for option in sorted(allowed, key=str)])
@@ -221,13 +280,26 @@ def _scan_input_for(name: str, value: str | int) -> str:
             f'<input id="{escaped_name}" name="{escaped_name}" '
             f'type="number"{minimum} step="1" value="{escaped_value}">'
         )
-    return _row(label, name, control, SCAN_FIELD_HELP[name])
+    css_class = "fixed-scan-parameter" if ui_options is not None and len(ui_options) == 1 else ""
+    return _row(label, name, control, SCAN_FIELD_HELP[name], css_class=css_class)
+
+
+def _show_fixed_scan_fields_input(value: bool) -> str:
+    control = _checkbox_for(SHOW_FIXED_SCAN_FIELDS_NAME, value)
+    return _row(
+        "Show parameters with fixed values",
+        SHOW_FIXED_SCAN_FIELDS_NAME,
+        control,
+        SHOW_FIXED_SCAN_FIELDS_HELP,
+    )
 
 
 def _service_input_for(name: str, value: str | bool) -> str:
     label = SERVICE_FIELD_LABELS[name]
     escaped_name = html.escape(name)
-    if name == "DEBUG":
+    if name == "KEEP_ORIGINAL":
+        control = _checkbox_for(name, bool(value))
+    elif name == "DEBUG":
         control = _select_for(name, value, ["false", "true"])
     elif name == "LOG_LEVEL":
         control = _select_for(name, str(value), sorted(LOG_LEVELS))
@@ -267,13 +339,14 @@ def _post_processing_input_for(
         control = _select_for(name, str(value), ["none", "auto", "DIN-A4"])
         return _row(label, name, control, POST_PROCESSING_FIELD_HELP[name])
     disabled = "" if crop_mode == "auto" else " disabled"
+    css_class = "auto-crop-parameter" if crop_mode == "auto" else "auto-crop-parameter hidden"
     if name in {"background_threshold", "document_contrast"}:
         control = _number_input_for(name, int(value), minimum=0, maximum=255, extra=disabled)
     elif name in {"min_document_width_percent", "min_document_height_percent"}:
         control = _number_input_for(name, int(value), minimum=1, maximum=100, extra=disabled)
     else:
         control = _number_input_for(name, int(value), minimum=0, maximum=500, extra=disabled)
-    return _row(label, name, control, POST_PROCESSING_FIELD_HELP[name])
+    return _row(label, name, control, POST_PROCESSING_FIELD_HELP[name], css_class=css_class)
 
 
 def _section_card(caption: str, rows: str) -> str:
@@ -288,13 +361,30 @@ def _section_card(caption: str, rows: str) -> str:
       </section>"""
 
 
+def _page_json(data: object) -> str:
+    return (
+        json.dumps(data)
+        .replace("&", "\\u0026")
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
+
+
 def render_index(
     service_values: dict[str, str | bool],
     post_processing_values: dict[str, bool | int | str],
     scan_values: dict[str, str | int],
-    *,
-    message: str = "",
+    ui_values: dict[str, bool],
 ) -> bytes:
+    default_values = {
+        "service": service_settings_to_dict(load_service_settings_defaults()),
+        "post_processing": post_processing_settings_to_dict(PostProcessingSettings()),
+        "scan": scan_ticket_to_dict(load_scan_ticket_defaults()),
+        "ui": ui_settings_to_dict(UiSettings()),
+    }
+    default_values_json = _page_json(default_values)
     service_fields = "\n".join(
         _service_input_for(name, service_values[name]) for name in SERVICE_FIELD_ORDER
     )
@@ -306,8 +396,10 @@ def render_index(
         )
         for name in POST_PROCESSING_FIELD_ORDER
     )
-    scan_fields = "\n".join(_scan_input_for(name, scan_values[name]) for name in SCAN_FIELD_ORDER)
-    message_html = f'<span class="message">{html.escape(message)}</span>' if message else ""
+    scan_fields = "\n".join(
+        [_show_fixed_scan_fields_input(ui_values["show_fixed_scan_parameters"])]
+        + [_scan_input_for(name, scan_values[name]) for name in SCAN_FIELD_ORDER]
+    )
     service_section = _section_card("Service parameters", service_fields)
     scan_section = _section_card("Scan parameters", scan_fields)
     post_processing_section = _section_card("Document Cropping", post_processing_fields)
@@ -353,6 +445,13 @@ def render_index(
       font-size: 24px;
       font-weight: 650;
       letter-spacing: 0;
+    }}
+    .topbar {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
     }}
     form {{
       display: grid;
@@ -452,12 +551,29 @@ def render_index(
       font: inherit;
       padding: 7px 9px;
     }}
+    input[type="checkbox"] {{
+      width: 18px;
+      min-height: 18px;
+      height: 18px;
+      margin: 0;
+      accent-color: var(--accent);
+      vertical-align: middle;
+    }}
+    input:disabled, select:disabled {{
+      background: color-mix(in srgb, var(--border) 22%, transparent);
+      color: var(--muted);
+      cursor: not-allowed;
+      opacity: 0.65;
+    }}
+    .fixed-scan-parameter.hidden,
+    .auto-crop-parameter.hidden {{
+      display: none;
+    }}
     .actions {{
       display: flex;
       align-items: center;
-      justify-content: flex-end;
-      gap: 14px;
-      margin-top: 0;
+      gap: 10px;
+      margin-left: auto;
     }}
     button {{
       min-height: 38px;
@@ -467,14 +583,30 @@ def render_index(
       color: white;
       font: inherit;
       font-weight: 650;
+      min-width: 82px;
       padding: 8px 16px;
       cursor: pointer;
+      transition: background-color 120ms ease, opacity 120ms ease;
     }}
-    .message {{
-      color: var(--accent);
-      margin-right: auto;
+    button:disabled {{
+      cursor: not-allowed;
+      opacity: 0.92;
+    }}
+    button.saved {{
+      background: #16823a;
+    }}
+    button.error {{
+      background: #b42318;
+    }}
+    button.secondary-button {{
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--fg);
     }}
     @media (max-width: 640px) {{
+      .topbar {{
+        align-items: flex-start;
+      }}
       th, td {{
         display: block;
         width: 100%;
@@ -492,27 +624,121 @@ def render_index(
 </head>
 <body>
   <main>
-    <h1>WSD Scan Receiver</h1>
     <form method="post" action="/api/config">
+      <div class="topbar">
+        <h1>WSD Scan Receiver</h1>
+        <div class="actions">
+          <button id="restore_defaults_button" class="secondary-button" type="button">
+            Restore defaults
+          </button>
+          <button id="save_button" type="submit">Save</button>
+        </div>
+      </div>
       {service_section}
       {scan_section}
       {post_processing_section}
-      <div class="actions">{message_html}<button type="submit">Save</button></div>
     </form>
+    <script id="default_values" type="application/json">{default_values_json}</script>
     <script>
+      const form = document.querySelector('form');
+      const saveButton = document.querySelector('#save_button');
+      const restoreDefaultsButton = document.querySelector('#restore_defaults_button');
+      const defaultValues = JSON.parse(
+        document.querySelector('#default_values').textContent
+      );
       const cropMode = document.querySelector('#crop_mode');
+      const showFixedScanParameters = document.querySelector('#show_fixed_scan_parameters');
+      const fixedScanRows = Array.from(document.querySelectorAll('.fixed-scan-parameter'));
+      const autoCropRows = Array.from(document.querySelectorAll('.auto-crop-parameter'));
       const autoControls = Array.from(document.querySelectorAll(
         '#background_threshold, #document_contrast, #min_document_width_percent, '
         + '#min_document_height_percent, #crop_side_padding, #crop_bottom_padding'
       ));
       function syncPostProcessingControls() {{
         const autoEnabled = cropMode.value === 'auto';
+        for (const row of autoCropRows) {{
+          row.classList.toggle('hidden', !autoEnabled);
+        }}
         for (const control of autoControls) {{
           control.disabled = !autoEnabled;
         }}
       }}
       cropMode.addEventListener('change', syncPostProcessingControls);
       syncPostProcessingControls();
+
+      function syncFixedScanRows() {{
+        const visible = showFixedScanParameters.checked;
+        for (const row of fixedScanRows) {{
+          row.classList.toggle('hidden', !visible);
+        }}
+      }}
+      showFixedScanParameters.addEventListener('change', syncFixedScanRows);
+      syncFixedScanRows();
+
+      function resetSaveButton() {{
+        saveButton.classList.remove('saved', 'error');
+        saveButton.disabled = false;
+        saveButton.textContent = 'Save';
+      }}
+
+      function setControlValue(name, value) {{
+        const control = form.elements.namedItem(name);
+        if (!control) {{
+          return;
+        }}
+        if (control.type === 'checkbox') {{
+          control.checked = Boolean(value);
+          return;
+        }}
+        control.value = String(value);
+      }}
+
+      function restoreDefaults() {{
+        for (const section of ['service', 'post_processing', 'scan', 'ui']) {{
+          for (const [name, value] of Object.entries(defaultValues[section])) {{
+            setControlValue(name, value);
+          }}
+        }}
+        syncPostProcessingControls();
+        syncFixedScanRows();
+        resetSaveButton();
+      }}
+      restoreDefaultsButton.addEventListener('click', restoreDefaults);
+
+      function setTemporaryButtonState(className, label, disabled) {{
+        saveButton.classList.remove('saved', 'error');
+        saveButton.classList.add(className);
+        saveButton.disabled = disabled;
+        saveButton.textContent = label;
+        window.setTimeout(resetSaveButton, 1400);
+      }}
+
+      form.addEventListener('submit', async (event) => {{
+        event.preventDefault();
+        saveButton.disabled = true;
+        saveButton.textContent = 'Saving';
+        const disabledControls = Array.from(form.querySelectorAll(':disabled'));
+        for (const control of disabledControls) {{
+          control.disabled = false;
+        }}
+        const body = new URLSearchParams(new FormData(form));
+        for (const control of disabledControls) {{
+          control.disabled = true;
+        }}
+        try {{
+          const response = await fetch('/api/config', {{
+            method: 'POST',
+            headers: {{ 'Content-Type': 'application/x-www-form-urlencoded' }},
+            body,
+          }});
+          if (!response.ok) {{
+            throw new Error('save failed');
+          }}
+          setTemporaryButtonState('saved', 'Saved', true);
+        }} catch (_error) {{
+          setTemporaryButtonState('error', 'Error', false);
+        }}
+      }});
     </script>
   </main>
 </body>
@@ -528,6 +754,7 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
     service_settings_store: ServiceSettingsStore
     post_processing_store: PostProcessingSettingsStore
     scan_ticket_store: ScanTicketStore
+    ui_settings_store: UiSettingsStore
 
     def log_message(self, fmt: str, *args: Any) -> None:
         LOGGER.info(
@@ -543,6 +770,7 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
                     self.service_settings_store.as_dict(),
                     self.post_processing_store.as_dict(),
                     self.scan_ticket_store.as_dict(),
+                    self.ui_settings_store.as_dict(),
                 ),
                 "text/html; charset=utf-8",
             )
@@ -554,6 +782,7 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
                     "service": self.service_settings_store.as_dict(),
                     "post_processing": self.post_processing_store.as_dict(),
                     "scan": self.scan_ticket_store.as_dict(),
+                    "ui": self.ui_settings_store.as_dict(),
                 },
             )
             return
@@ -573,8 +802,11 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
                 scan_values = values
                 service_settings = self.service_settings_store.get()
                 post_processing = self.post_processing_store.get()
+                ui_settings = self.ui_settings_store.get()
             else:
-                service_values, post_processing_values, scan_values = self._split_values(values)
+                service_values, post_processing_values, scan_values, ui_values = (
+                    self._split_values(values)
+                )
                 service_settings_from_mapping(
                     service_values,
                     base=self.service_settings_store.get(),
@@ -584,8 +816,10 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
                     base=self.post_processing_store.get(),
                 )
                 scan_ticket_from_mapping(scan_values, base=self.scan_ticket_store.get())
+                ui_settings_from_mapping(ui_values, base=self.ui_settings_store.get())
                 service_settings = self.service_settings_store.update(service_values)
                 post_processing = self.post_processing_store.update(post_processing_values)
+                ui_settings = self.ui_settings_store.update(ui_values)
             scan_ticket = self.scan_ticket_store.update(scan_values)
         except ValueError as exc:
             if self.headers.get("Content-Type", "").lower().startswith("application/json"):
@@ -597,7 +831,7 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
                         self.service_settings_store.as_dict(),
                         self.post_processing_store.as_dict(),
                         self.scan_ticket_store.as_dict(),
-                        message=str(exc),
+                        self.ui_settings_store.as_dict(),
                     ),
                     "text/html; charset=utf-8",
                 )
@@ -613,6 +847,7 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
                         "service": service_settings_to_dict(service_settings),
                         "post_processing": post_processing_settings_to_dict(post_processing),
                         "scan": scan_ticket_to_dict(scan_ticket),
+                        "ui": ui_settings_to_dict(ui_settings),
                     },
                 )
             return
@@ -622,7 +857,7 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
                 service_settings_to_dict(service_settings),
                 post_processing_settings_to_dict(post_processing),
                 scan_ticket_to_dict(scan_ticket),
-                message="Saved.",
+                ui_settings_to_dict(ui_settings),
             ),
             "text/html; charset=utf-8",
         )
@@ -630,24 +865,38 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
     def _split_values(
         self,
         values: dict[str, Any],
-    ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-        if "service" in values or "post_processing" in values or "scan" in values:
+    ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+        if (
+            "service" in values
+            or "post_processing" in values
+            or "scan" in values
+            or "ui" in values
+        ):
             service_values = values.get("service", {})
             post_processing_values = values.get("post_processing", {})
             scan_values = values.get("scan", {})
+            ui_values = values.get("ui", {})
             if (
                 not isinstance(service_values, dict)
                 or not isinstance(post_processing_values, dict)
                 or not isinstance(scan_values, dict)
+                or not isinstance(ui_values, dict)
             ):
-                raise ValueError("service, post_processing, and scan must contain JSON objects")
-            return service_values, post_processing_values, scan_values
+                raise ValueError(
+                    "service, post_processing, scan, and ui must contain JSON objects"
+                )
+            return service_values, post_processing_values, scan_values, ui_values
         service_values = {name: values[name] for name in SERVICE_SETTINGS_FIELDS if name in values}
+        if "KEEP_ORIGINAL" not in service_values:
+            service_values["KEEP_ORIGINAL"] = "false"
         post_processing_values = {
             name: values[name] for name in POST_PROCESSING_FIELDS if name in values
         }
         scan_values = {name: values[name] for name in SCAN_FIELD_ORDER if name in values}
-        return service_values, post_processing_values, scan_values
+        ui_values = {name: values[name] for name in UI_SETTINGS_FIELDS if name in values}
+        if "show_fixed_scan_parameters" not in ui_values:
+            ui_values["show_fixed_scan_parameters"] = "false"
+        return service_values, post_processing_values, scan_values, ui_values
 
     def _read_values(self) -> dict[str, Any]:
         content_length = int(self.headers.get("Content-Length", "0"))
@@ -681,6 +930,7 @@ def make_admin_handler(
     service_settings_store: ServiceSettingsStore,
     post_processing_store: PostProcessingSettingsStore,
     scan_ticket_store: ScanTicketStore,
+    ui_settings_store: UiSettingsStore,
 ) -> type[AdminRequestHandler]:
     """Create a request handler class bound to a scan ticket store."""
 
@@ -690,6 +940,7 @@ def make_admin_handler(
     ConfiguredAdminRequestHandler.service_settings_store = service_settings_store
     ConfiguredAdminRequestHandler.post_processing_store = post_processing_store
     ConfiguredAdminRequestHandler.scan_ticket_store = scan_ticket_store
+    ConfiguredAdminRequestHandler.ui_settings_store = ui_settings_store
     return ConfiguredAdminRequestHandler
 
 
@@ -701,6 +952,7 @@ class AdminService:
         service_settings_store: ServiceSettingsStore,
         post_processing_store: PostProcessingSettingsStore,
         scan_ticket_store: ScanTicketStore,
+        ui_settings_store: UiSettingsStore,
         *,
         port: int = ADMIN_PORT,
         server_factory: Callable[..., ThreadingHTTPServer] = ThreadingHTTPServerNoFqdn,
@@ -710,6 +962,7 @@ class AdminService:
             service_settings_store,
             post_processing_store,
             scan_ticket_store,
+            ui_settings_store,
         )
         self.servers: list[ThreadingHTTPServer] = [server_factory(("", port), handler)]
         try:

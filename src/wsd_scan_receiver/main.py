@@ -44,16 +44,23 @@ def run() -> None:
     scan_ticket_store = config.scan_ticket_store
     service_settings_store = config.service_settings_store
     post_processing_store = config.post_processing_store
+    ui_settings_store = config.ui_settings_store
     if (
         scan_ticket_store is None
         or service_settings_store is None
         or post_processing_store is None
+        or ui_settings_store is None
     ):
         raise RuntimeError("Config.from_env must provide admin config stores")
     ws_scan_client = WsScanClientService(config)
     discovery = DiscoveryService(config, ws_scan_client.observe_discovery_payload)
     receiver = ReceiverService(config, ws_scan_client.handle_scan_available_event)
-    admin = AdminService(service_settings_store, post_processing_store, scan_ticket_store)
+    admin = AdminService(
+        service_settings_store,
+        post_processing_store,
+        scan_ticket_store,
+        ui_settings_store,
+    )
     stop = False
 
     def request_stop(signum: int, _frame: object) -> None:

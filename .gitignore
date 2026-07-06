@@ -1,3 +1,4 @@
+.DS_Store
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -10,6 +11,7 @@ dist/
 *.egg-info/
 
 scans/
+original/
 debug-dumps/
 data/
 epsonscan2-lib/

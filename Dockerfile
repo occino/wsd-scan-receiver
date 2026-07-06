@@ -3,6 +3,7 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     OUTPUT_DIR=/scans \
+    ORIGINAL_DIR=/original \
     RAW_DUMP_DIR=/debug-dumps \
     WSD_HTTP_PORT=5357
 
@@ -13,8 +14,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* && \
     addgroup --system wsd && \
     adduser --system --ingroup wsd --home /app wsd && \
-    mkdir -p /scans /debug-dumps /data && \
-    chown -R wsd:wsd /app /scans /debug-dumps /data
+    mkdir -p /scans /original /debug-dumps /data && \
+    chown -R wsd:wsd /app /scans /original /debug-dumps /data
 
 COPY pyproject.toml README.md ./
 COPY src ./src

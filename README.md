@@ -103,6 +103,7 @@ Environment variables:
 | `WSD_UUID_FILE` | `/data/wsd-uuid` | File used to persist generated UUID |
 | `WSD_HTTP_PORT` | `5357` | TCP SOAP/DPWS HTTP port |
 | `OUTPUT_DIR` | `/scans` | Directory where scans are written inside the container |
+| `ORIGINAL_DIR` | `/original` | Directory where `Keep original` stores copies inside the container |
 | `WSD_HOST` | auto-detected | IP advertised in WSD `XAddrs`; set this on multi-homed hosts |
 | `WSD_INTERFACE` | unset | LAN interface for IPv6 WS-Discovery, for example `ens16` |
 | `WSD_SUBSCRIBE_ENABLED` | `false` | Actively subscribe this receiver as a WSD scan destination |
@@ -121,6 +122,7 @@ Compose-specific `.env` variables:
 | Variable | Default | Description |
 | --- | --- | --- |
 | `SCAN_DIR` | `./scans` | Host directory mounted as `/scans` |
+| `ORIGINAL_DIR` | `./original` | Host directory mounted as `/original` |
 | `DEBUG_DUMPS_DIR` | `./debug-dumps` | Host directory mounted as `/debug-dumps` |
 | `DATA_DIR` | `./data` | Host directory mounted as `/data` |
 | `PUID` | `1000` | Container user ID for file writes |
@@ -142,13 +144,13 @@ parameters below. The behavior can be tuned in the same section:
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `Crop mode` | `auto` | `none` skips cropping, `auto` uses automatic document detection, `DIN-A4` crops a fixed A4 rectangle |
+| `Crop mode` | `DIN-A4` | `none` skips cropping, `auto` uses automatic document detection, `DIN-A4` crops a fixed A4 rectangle |
 | `Background threshold` | `220` | Corner brightness at or above this value disables auto-cropping |
 | `Document contrast` | `35` | Brightness difference from the detected background needed to identify the document |
 | `Minimum document width (%)` | `50` | Ignore detected crop boxes narrower than this share of the image |
 | `Minimum document height (%)` | `50` | Ignore detected crop boxes shorter than this share of the image |
-| `Side crop padding (px)` | `0` | Pixels added back on the detected free side; for top-left alignment this is the right edge |
-| `Bottom crop padding (px)` | `0` | Pixels added back below the detected document |
+| `Side crop padding (px)` | `20` | Pixels added back on the detected free side; for top-left alignment this is the right edge |
+| `Bottom crop padding (px)` | `20` | Pixels added back below the detected document |
 
 ### Scan Ticket Parameters
 
@@ -156,6 +158,9 @@ These values are sent in the WS-Scan `CreateScanJob` request. They are no
 longer configured with `.env` or `SCAN_*` variables. Open
 `http://127.0.0.1:8888/` and save the form to write `/data/config.json`.
 Changes apply to the next scan job without restarting the service.
+The `Keep original` service parameter defaults to `false` and stores a copy of
+the final scan file in `ORIGINAL_DIR`, including the cropped file when document
+cropping is active.
 
 Defaults are shipped in `src/wsd_scan_receiver/scan_defaults.json`. The current
 defaults are Epson ET-2750 values observed to work. Other scanners may reject a

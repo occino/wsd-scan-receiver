@@ -33,7 +33,9 @@ from .receiver import (
     advertised_host_ip,
     guess_extension,
     is_debug_enabled,
+    original_output_dir,
     post_processing_settings,
+    scan_ticket,
     service_settings,
     write_payload,
 )
@@ -1035,6 +1037,8 @@ class WsScanClientService:
                 suffix,
                 body,
                 post_processing_settings=post_processing_settings(self.config),
+                original_dir=original_output_dir(self.config),
+                jpeg_quality=scan_ticket(self.config).compression_quality,
             )
             LOGGER.info(
                 "stored retrieved scan payload",
@@ -1065,6 +1069,8 @@ class WsScanClientService:
                 suffix,
                 payload,
                 post_processing_settings=post_processing_settings(self.config),
+                original_dir=original_output_dir(self.config),
+                jpeg_quality=scan_ticket(self.config).compression_quality,
             )
             stored += 1
             LOGGER.info(

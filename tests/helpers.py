@@ -7,7 +7,7 @@ def default_scan_ticket() -> ScanTicketConfig:
         input_source="Auto",
         content_type="Text",
         color_processing="RGB24",
-        resolution=100,
+        resolution=300,
         compression_quality=50,
         images_to_transfer=1,
         width=8500,

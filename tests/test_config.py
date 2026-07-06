@@ -9,15 +9,18 @@ from wsd_scan_receiver.config import (
     PostProcessingSettingsStore,
     ScanTicketStore,
     ServiceSettingsStore,
+    UiSettingsStore,
     load_or_create_uuid,
     load_post_processing_settings,
     load_scan_ticket_config,
     load_service_settings,
+    load_ui_settings,
     normalize_endpoint_uuid,
     parse_bool,
     post_processing_settings_to_dict,
     scan_ticket_to_dict,
     service_settings_to_dict,
+    ui_settings_to_dict,
 )
 
 
@@ -85,6 +88,7 @@ def test_config_from_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
     monkeypatch.setenv("WSD_DEVICE_NAME", "Office Scanner")
     monkeypatch.setenv("WSD_HTTP_PORT", "9999")
     monkeypatch.setenv("OUTPUT_DIR", str(tmp_path / "scans"))
+    monkeypatch.setenv("ORIGINAL_DIR", str(tmp_path / "original"))
     monkeypatch.setenv("RAW_DUMP_DIR", str(tmp_path / "dumps"))
     monkeypatch.setenv("DEBUG", "true")
     monkeypatch.setenv("WSD_SCANNER_IP", "192.0.2.21")
@@ -101,8 +105,9 @@ def test_config_from_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
     assert config.metadata_url == "http://192.0.2.10:9999/metadata"
     assert config.scanner_ip == "192.0.2.21"
     assert config.max_post_bytes == 1024
+    assert config.original_dir == tmp_path / "original"
     assert config.scan_ticket.format == "exif"
-    assert config.scan_ticket.resolution == 100
+    assert config.scan_ticket.resolution == 300
     assert config.scan_ticket_store is not None
     assert config.wsd_subscribe_enabled is False
     assert config.wsd_subscribe_interval_seconds == 60
@@ -195,6 +200,7 @@ def test_load_service_settings_merges_over_env(
     settings = load_service_settings(config_file)
 
     assert settings.wsd_device_name == "Stored Scanner"
+    assert settings.keep_original is False
     assert settings.debug is True
     assert settings.log_level == "WARNING"
 
@@ -203,7 +209,25 @@ def test_load_post_processing_settings_defaults_enabled(tmp_path: Path) -> None:
     settings = load_post_processing_settings(tmp_path / "config.json")
 
     assert settings.enabled is True
-    assert settings.crop_mode == "auto"
+    assert settings.crop_mode == "DIN-A4"
+
+
+def test_load_ui_settings_defaults_hidden(tmp_path: Path) -> None:
+    settings = load_ui_settings(tmp_path / "config.json")
+
+    assert settings.show_fixed_scan_parameters is False
+
+
+def test_load_ui_settings_reads_saved_value(tmp_path: Path) -> None:
+    config_file = tmp_path / "config.json"
+    config_file.write_text(
+        json.dumps({"ui": {"show_fixed_scan_parameters": True}}),
+        encoding="utf-8",
+    )
+
+    settings = load_ui_settings(config_file)
+
+    assert settings.show_fixed_scan_parameters is True
 
 
 def test_load_post_processing_settings_migrates_disabled_config_to_none(tmp_path: Path) -> None:
@@ -320,9 +344,16 @@ def test_service_settings_store_updates_file_and_memory(tmp_path: Path) -> None:
     config_file = tmp_path / "config.json"
     store = ServiceSettingsStore(config_file)
 
-    settings = store.update({"WSD_DEVICE_NAME": "Office Scanner", "DEBUG": "true"})
+    settings = store.update(
+        {
+            "WSD_DEVICE_NAME": "Office Scanner",
+            "KEEP_ORIGINAL": "false",
+            "DEBUG": "true",
+        }
+    )
 
     assert settings.wsd_device_name == "Office Scanner"
+    assert settings.keep_original is False
     assert store.get().debug is True
     assert json.loads(config_file.read_text(encoding="utf-8"))[
         "service"
@@ -357,6 +388,19 @@ def test_post_processing_settings_store_updates_file_and_memory(tmp_path: Path) 
     ] == post_processing_settings_to_dict(settings)
 
 
+def test_ui_settings_store_updates_file_and_memory(tmp_path: Path) -> None:
+    config_file = tmp_path / "config.json"
+    store = UiSettingsStore(config_file)
+
+    settings = store.update({"show_fixed_scan_parameters": "true"})
+
+    assert settings.show_fixed_scan_parameters is True
+    assert store.get().show_fixed_scan_parameters is True
+    assert json.loads(config_file.read_text(encoding="utf-8"))["ui"] == ui_settings_to_dict(
+        settings
+    )
+
+
 def test_service_settings_store_rejects_invalid_update_without_changing_memory(
     tmp_path: Path,
 ) -> None:
@@ -379,7 +423,7 @@ def test_config_from_env_ignores_invalid_scan_env(
 
     config = Config.from_env()
 
-    assert config.scan_ticket.resolution == 100
+    assert config.scan_ticket.resolution == 300
 
 
 def test_scan_ticket_store_rejects_invalid_update_without_changing_memory(
@@ -426,7 +470,7 @@ def test_config_from_env_legacy_scan_env_no_longer_overrides(
     assert config.scan_ticket.input_source == "Auto"
     assert config.scan_ticket.content_type == "Text"
     assert config.scan_ticket.color_processing == "RGB24"
-    assert config.scan_ticket.resolution == 100
+    assert config.scan_ticket.resolution == 300
     assert config.scan_ticket.compression_quality == 50
     assert config.scan_ticket.images_to_transfer == 1
     assert config.scan_ticket.width == 8500

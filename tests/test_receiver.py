@@ -16,6 +16,7 @@ def _config(tmp_path: Path, port: int = 0) -> Config:
         endpoint_uuid="uuid:test",
         http_port=port,
         output_dir=tmp_path / "scans",
+        original_dir=tmp_path / "original",
         debug=True,
         raw_dump_dir=tmp_path / "dumps",
         log_level="INFO",

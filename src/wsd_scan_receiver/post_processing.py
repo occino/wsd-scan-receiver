@@ -71,6 +71,8 @@ def _crop_in_place(
     path: Path,
     bbox: tuple[int, int, int, int],
     settings: PostProcessingSettings,
+    *,
+    jpeg_quality: int | None = None,
 ) -> bool:
     if bbox == (0, 0, image.width, image.height):
         return False
@@ -89,8 +91,24 @@ def _crop_in_place(
         bottom_padding=settings.crop_bottom_padding,
     )
     cropped = image.crop(padded)
-    cropped.save(path)
+    _save_cropped_image(cropped, path, image, jpeg_quality=jpeg_quality)
     return True
+
+
+def _save_cropped_image(
+    cropped: Image.Image,
+    path: Path,
+    source: Image.Image,
+    *,
+    jpeg_quality: int | None = None,
+) -> None:
+    save_kwargs: dict[str, object] = {}
+    for key in ("dpi", "exif", "icc_profile"):
+        if key in source.info:
+            save_kwargs[key] = source.info[key]
+    if jpeg_quality is not None and path.suffix.lower() in {".jpg", ".jpeg"}:
+        save_kwargs["quality"] = jpeg_quality
+    cropped.save(path, **save_kwargs)
 
 
 def _din_a4_bbox(width: int, height: int) -> tuple[int, int, int, int]:
@@ -164,7 +182,9 @@ def _foreground_projection_bbox(
     return (0, 0, right, bottom)
 
 
-def _crop_document_image(path: Path, settings: PostProcessingSettings) -> bool:
+def _crop_document_image(
+    path: Path, settings: PostProcessingSettings, *, jpeg_quality: int | None = None
+) -> bool:
     """Crop a document from the scan background in place."""
     with Image.open(path) as image:
         if settings.crop_mode == "none":
@@ -175,7 +195,7 @@ def _crop_document_image(path: Path, settings: PostProcessingSettings) -> bool:
             if bbox == (0, 0, image.width, image.height):
                 return False
             cropped = image.crop(bbox)
-            cropped.save(path)
+            _save_cropped_image(cropped, path, image, jpeg_quality=jpeg_quality)
             return True
 
         comparison = image.convert("RGB")
@@ -189,7 +209,9 @@ def _crop_document_image(path: Path, settings: PostProcessingSettings) -> bool:
             )
             if bbox is not None:
                 bbox = (0, 0, bbox[2], bbox[3])
-            if bbox is not None and _crop_in_place(image, path, bbox, settings):
+            if bbox is not None and _crop_in_place(
+                image, path, bbox, settings, jpeg_quality=jpeg_quality
+            ):
                 return True
 
         bbox = _foreground_projection_bbox(
@@ -199,19 +221,21 @@ def _crop_document_image(path: Path, settings: PostProcessingSettings) -> bool:
         )
         if bbox is None:
             return False
-        return _crop_in_place(image, path, bbox, settings)
+        return _crop_in_place(image, path, bbox, settings, jpeg_quality=jpeg_quality)
 
 
 def post_process_scan_file(
     path: Path,
     suffix: str,
     settings: PostProcessingSettings,
+    *,
+    jpeg_quality: int | None = None,
 ) -> bool:
     """Apply supported post-processing steps to a temporary scan file."""
     if suffix.lower() not in IMAGE_SUFFIXES:
         return False
     try:
-        return _crop_document_image(path, settings)
+        return _crop_document_image(path, settings, jpeg_quality=jpeg_quality)
     except OSError:
         LOGGER.warning("scan image post-processing failed", exc_info=True)
         return False
@@ -225,6 +249,8 @@ def store_scan_payload(
     *,
     post_processing_settings: PostProcessingSettings | None = None,
     post_processing_enabled: bool | None = None,
+    original_dir: Path | None = None,
+    jpeg_quality: int | None = None,
     temp_root: Path = TEMP_ROOT,
 ) -> Path:
     """Store a scan payload, optionally processing it in a temp directory first."""
@@ -234,13 +260,15 @@ def store_scan_payload(
         enabled=True if post_processing_enabled is None else post_processing_enabled
     )
     if not settings.enabled or settings.crop_mode == "none":
-        return _write_final(final_path, payload)
+        out_path = _write_final(final_path, payload)
+        _copy_original(out_path, original_dir)
+        return out_path
 
     temp_root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=temp_root) as temp_directory:
         temp_path = Path(temp_directory) / f"scan{suffix}"
         temp_path.write_bytes(payload)
-        cropped = post_process_scan_file(temp_path, suffix, settings)
+        cropped = post_process_scan_file(temp_path, suffix, settings, jpeg_quality=jpeg_quality)
         with tempfile.NamedTemporaryFile(
             dir=output_dir,
             prefix=f".{final_path.name}.",
@@ -255,6 +283,7 @@ def store_scan_payload(
             "stored post-processed scan payload",
             extra={"path": str(final_path), "cropped": cropped},
         )
+        _copy_original(final_path, original_dir)
         return final_path
 
 
@@ -269,6 +298,29 @@ def _write_final(path: Path, payload: bytes) -> Path:
         tmp_path = Path(handle.name)
     tmp_path.replace(path)
     return path
+
+
+def _copy_original(path: Path, original_dir: Path | None) -> None:
+    if original_dir is None:
+        return
+    tmp_path: Path | None = None
+    final_path = original_dir / path.name
+    try:
+        original_dir.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            dir=original_dir,
+            prefix=f".{final_path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            with path.open("rb") as source:
+                shutil.copyfileobj(source, handle)
+            tmp_path = Path(handle.name)
+        tmp_path.replace(final_path)
+    except OSError:
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
+        LOGGER.exception("failed to copy scan file to original directory")
 
 
 def _timestamped_name(prefix: str, suffix: str) -> str:
