@@ -37,7 +37,7 @@ def _config(tmp_path: Path) -> Config:
         raw_dump_dir=tmp_path / "dumps",
         log_level="INFO",
         host_ip="192.0.2.20",
-        interface="ens16",
+        interface="en0",
         scanner_ip=None,
         max_post_bytes=100 * 1024 * 1024,
         wsd_subscribe_enabled=True,

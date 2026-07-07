@@ -150,7 +150,7 @@ SERVICE_FIELD_HELP = {
     ),
     "WSD_INTERFACE": (
         "Network interface used for IPv6 WS-Discovery. "
-        "Value: empty or an interface name such as ens16."
+        "Value: empty or an interface name such as en0."
     ),
     "WSD_SCANNER_IP": "Scanner IP for directed WSD probing. Value: empty or an IPv4/IPv6 address.",
     "KEEP_ORIGINAL": (

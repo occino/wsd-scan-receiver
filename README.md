@@ -61,7 +61,7 @@ WSD_SUBSCRIBE_ENABLED=true
 WSD_SCANNER_IP=192.168.0.21
 ```
 
-Set `WSD_INTERFACE`, for example `ens16`, only when you need IPv6
+Set `WSD_INTERFACE`, for example `en0`, only when you need IPv6
 WS-Discovery on a specific LAN interface.
 
 Start the service:
@@ -133,7 +133,7 @@ Environment variables:
 | `OUTPUT_DIR` | `/scans` | Directory where scans are written inside the container |
 | `ORIGINAL_DIR` | `/original` | Directory where `Keep original` stores copies inside the container |
 | `WSD_HOST` | auto-detected | IP advertised in WSD `XAddrs`; set this on multi-homed hosts |
-| `WSD_INTERFACE` | unset | LAN interface for IPv6 WS-Discovery, for example `ens16` |
+| `WSD_INTERFACE` | unset | LAN interface for IPv6 WS-Discovery, for example `en0` |
 | `WSD_SUBSCRIBE_ENABLED` | `false` | Actively subscribe this receiver as a WSD scan destination |
 | `WSD_SUBSCRIBE_INTERVAL_SECONDS` | `60` | Probe/subscription refresh interval |
 | `WSD_SCANNER_IP` | unset | Optional scanner IP for directed WSD probing when multicast is unreliable |

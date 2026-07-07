@@ -213,7 +213,7 @@ def test_admin_post_combined_config_writes_service_and_scan(tmp_path: Path) -> N
                     "service": {
                         "WSD_DEVICE_NAME": "Office Scanner",
                         "WSD_HOST": "192.0.2.10",
-                        "WSD_INTERFACE": "ens16",
+                        "WSD_INTERFACE": "en0",
                         "WSD_SCANNER_IP": "192.0.2.21",
                         "KEEP_ORIGINAL": False,
                         "DEBUG": True,
@@ -383,7 +383,7 @@ def test_admin_form_post_unchecked_keep_original_saves_false(tmp_path: Path) -> 
         [
             "WSD_DEVICE_NAME=Paperless",
             "WSD_HOST=",
-            "WSD_INTERFACE=ens16",
+            "WSD_INTERFACE=en0",
             "WSD_SCANNER_IP=192.0.2.21",
             "DEBUG=false",
             "LOG_LEVEL=INFO",
@@ -446,7 +446,7 @@ def test_admin_form_post_saves_show_fixed_scan_parameters(tmp_path: Path) -> Non
         [
             "WSD_DEVICE_NAME=Paperless",
             "WSD_HOST=",
-            "WSD_INTERFACE=ens16",
+            "WSD_INTERFACE=en0",
             "WSD_SCANNER_IP=192.0.2.21",
             "DEBUG=false",
             "LOG_LEVEL=INFO",
